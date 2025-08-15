@@ -18,9 +18,9 @@ public class PlayerController : MonoBehaviour {
     void Update() {
         movement.x = Input.GetAxisRaw("Horizontal");
         movement.y = Input.GetAxisRaw("Vertical");
-
+              
         if (movement.x >= 0) {
-            transform.localScale = new Vector3(1f, 1f, 1f);
+            transform.localScale = new Vector3(1f, 1f, 1f); 
         }
         else {
             transform.localScale = new Vector3(-1f, 1f, 1f);
@@ -28,7 +28,7 @@ public class PlayerController : MonoBehaviour {
 
     }
 
-    private void FixedUpdate() {
+     void FixedUpdate() {
         rgbd2d.MovePosition(rgbd2d.position + movement.normalized * moveSpeed * Time.deltaTime);
     }
 }
