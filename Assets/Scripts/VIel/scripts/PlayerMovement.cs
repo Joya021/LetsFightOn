@@ -9,8 +9,13 @@ public class PlayerMovement : MonoBehaviour
     public Rigidbody2D rb;
     public bool canMove = true;
 
-    [Header("UI")]
-    public Text stunCooldownText; // Assign in Inspector
+    [Header("UI - Stun Ability Cooldown")]
+    public GameObject stunCooldownCanvas;
+    public Text stunCooldownText;
+
+    [Header("UI - Move Again Cooldown")]
+    public GameObject moveAgainCanvas;
+    public Text moveAgainText;
 
     [HideInInspector] public bool isStunned = false;
 
@@ -19,44 +24,53 @@ public class PlayerMovement : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
 
+    private Animator animator;
+
+    Vector2 movement;
+
     void Start()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
+        animator = GetComponent<Animator>();
         if (spriteRenderer != null)
             originalColor = spriteRenderer.color;
+
+        if (stunCooldownCanvas != null)
+            stunCooldownCanvas.SetActive(false);
+        if (moveAgainCanvas != null)
+            moveAgainCanvas.SetActive(false);
     }
 
     void Update()
     {
-        // Detect platform directly under player
         RaycastHit2D hit = Physics2D.Raycast(transform.position, Vector2.down, 1f);
         if (hit.collider != null)
-        {
             currentEffector = hit.collider.GetComponent<PlatformEffector2D>();
-        }
         else
-        {
             currentEffector = null;
-        }
 
-        // Press J to drop through platform
         if (Input.GetKeyDown(KeyCode.J) && currentEffector != null)
-        {
             StartCoroutine(DropThroughPlatform(currentEffector));
-        }
 
-        // Update stun cooldown
         if (isStunned)
         {
             stunCooldownTimer -= Time.deltaTime;
-            if (stunCooldownText != null)
-                stunCooldownText.text = $"Stunned: {stunCooldownTimer:F1}s";
+
+            if (moveAgainCanvas != null)
+                moveAgainCanvas.SetActive(true);
+            if (moveAgainText != null)
+                moveAgainText.text = $"{stunCooldownTimer:F1}";
 
             if (stunCooldownTimer <= 0f)
             {
                 isStunned = false;
                 UnlockMovement();
             }
+        }
+        else
+        {
+            if (moveAgainCanvas != null && moveAgainCanvas.activeSelf)
+                moveAgainCanvas.SetActive(false);
         }
     }
 
@@ -68,12 +82,21 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        float vertical = Input.GetAxisRaw("Vertical");
+        movement.x = Input.GetAxisRaw("Horizontal");
+        movement.y = Input.GetAxisRaw("Vertical");
 
-        Vector2 movement = new Vector2(horizontal, vertical).normalized * speed * Time.fixedDeltaTime;
+        // ✅ Only allow one axis at a time (no diagonals)
+        //if (Mathf.Abs(horizontal) > 0.1f)
+        //    vertical = 0f;
+        //else if (Mathf.Abs(vertical) > 0.1f)
+        //    horizontal = 0f;
 
-        rb.MovePosition(rb.position + movement);
+        //Vector2 movement = new Vector2(horizontal, vertical) * speed * Time.fixedDeltaTime;
+        rb.MovePosition(rb.position + movement.normalized * speed * Time.deltaTime);
+
+        animator.SetFloat("MovementX", movement.x);
+        animator.SetFloat("MovementY", movement.y);
+        animator.SetFloat("Speed", movement.magnitude);
     }
 
     IEnumerator DropThroughPlatform(PlatformEffector2D effector)
@@ -91,6 +114,9 @@ public class PlayerMovement : MonoBehaviour
 
         if (spriteRenderer != null && stunTime > 0)
             spriteRenderer.color = Color.blue;
+
+        if (moveAgainCanvas != null)
+            moveAgainCanvas.SetActive(true);
     }
 
     public void UnlockMovement()
@@ -101,7 +127,10 @@ public class PlayerMovement : MonoBehaviour
         if (spriteRenderer != null)
             spriteRenderer.color = originalColor;
 
-        if (stunCooldownText != null)
-            stunCooldownText.text = "";
+        if (moveAgainText != null)
+            moveAgainText.text = "";
+
+        if (moveAgainCanvas != null)
+            moveAgainCanvas.SetActive(false);
     }
 }

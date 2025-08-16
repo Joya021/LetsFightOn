@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,20 +13,38 @@ public class StunController : MonoBehaviour
     public float stunCooldown = 5f;
     private float cooldownTimer = 0f;
 
-    public Text cooldownText; // Assign in Inspector
+    [Header("UI")]
+    public GameObject stunCooldownCanvas; // BG + text
+    public Text cooldownText;
+
+    void Start()
+    {
+        if (stunCooldownCanvas != null)
+            stunCooldownCanvas.SetActive(false);
+    }
 
     void Update()
     {
-        // Cooldown countdown
+        // Cooldown logic
         if (cooldownTimer > 0)
         {
             cooldownTimer -= Time.deltaTime;
-            cooldownText.text = $"{cooldownTimer:F1}";
+
+            if (stunCooldownCanvas != null)
+                stunCooldownCanvas.SetActive(true);
+            if (cooldownText != null)
+                cooldownText.text = $"{Mathf.Max(cooldownTimer, 0f):F1}s";
+
+            if (cooldownTimer <= 0f)
+            {
+                cooldownTimer = 0f;
+                if (stunCooldownCanvas != null)
+                    stunCooldownCanvas.SetActive(false);
+            }
         }
-        else
-        {
-            cooldownText.text = " ";
-        }
+
+        // Prevent stun if player is in CodeCheckGame
+        if (IsInCodeCheckGame()) return;
 
         // Adjust stun range if enemy nearby
         bool enemyNearby = Physics2D.OverlapCircle(transform.position, detectEnemyRange, enemyLayer);
@@ -38,8 +54,29 @@ public class StunController : MonoBehaviour
         if (Input.GetKeyDown(stunKey) && cooldownTimer <= 0f)
         {
             TryStun(stunRange);
-            cooldownTimer = stunCooldown;
+            StartCooldown();
         }
+    }
+
+    private bool IsInCodeCheckGame()
+    {
+        GameManager gm = FindObjectOfType<GameManager>();
+        if (gm != null)
+        {
+            foreach (var codeGame in gm.allCodeGames)
+            {
+                if (codeGame != null && codeGame.IsBeingInteractedWith)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    public void StartCooldown()
+    {
+        cooldownTimer = stunCooldown;
+        if (stunCooldownCanvas != null)
+            stunCooldownCanvas.SetActive(true);
     }
 
     void TryStun(float stunRange)
@@ -64,4 +101,3 @@ public class StunController : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, detectEnemyRange);
     }
 }
-

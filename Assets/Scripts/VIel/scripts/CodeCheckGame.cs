@@ -1,7 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
-using System.Text;
 
 [System.Serializable]
 public class CodeTask
@@ -20,10 +19,13 @@ public class CodeCheckGame : MonoBehaviour
     private GameObject playerObject;
 
     [Header("UI Elements")]
-    public InputField codeInputField;
+    public InputField codeInputField; // No TMP
     public Text taskText;
     public GameObject overlayPanel;
     public Button checkButton;
+
+    [Header("Cooldown UI")]
+    public GameObject interactCooldownCanvas; // Background image + text container
     public Text interactCooldownText;
 
     [Header("Target Object")]
@@ -53,6 +55,9 @@ public class CodeCheckGame : MonoBehaviour
         if (overlayPanel != null)
             overlayPanel.SetActive(false);
 
+        if (interactCooldownCanvas != null)
+            interactCooldownCanvas.SetActive(false);
+
         playerObject = GameObject.FindGameObjectWithTag("Player");
         if (playerObject != null)
             playerMovement = playerObject.GetComponent<PlayerMovement>();
@@ -62,11 +67,10 @@ public class CodeCheckGame : MonoBehaviour
     {
         IsBeingInteractedWith = overlayPanel != null && overlayPanel.activeSelf;
 
-        // NEW: Check distance while the panel is active
         if (IsBeingInteractedWith && !IsPlayerInRange())
         {
             CloseCodePanel();
-            return; // Exit the rest of the Update method to prevent other checks
+            return;
         }
 
         if (IsBeingInteractedWith && Input.GetKeyDown(KeyCode.Escape))
@@ -112,9 +116,7 @@ public class CodeCheckGame : MonoBehaviour
             taskText.text = assignedTask != null ? $"Task:\n{assignedTask.instruction}" : "No tasks available.";
 
         if (overlayPanel != null)
-        {
             overlayPanel.SetActive(true);
-        }
 
         isTriggered = true;
         if (playerMovement != null) playerMovement.LockMovement();
@@ -123,9 +125,7 @@ public class CodeCheckGame : MonoBehaviour
     public void CloseCodePanel()
     {
         if (overlayPanel != null)
-        {
             overlayPanel.SetActive(false);
-        }
 
         isTriggered = false;
         if (playerMovement != null) playerMovement.UnlockMovement();
@@ -152,9 +152,7 @@ public class CodeCheckGame : MonoBehaviour
                 gameManager.RegisterCorrectObject(this);
 
             if (hunter != null)
-            {
                 hunter.NotifyCorrectObjectSolved(this);
-            }
         }
         else
         {
@@ -172,16 +170,23 @@ public class CodeCheckGame : MonoBehaviour
         isOnCooldown = true;
         float timer = interactCooldown;
 
+        if (interactCooldownCanvas != null)
+            interactCooldownCanvas.SetActive(true);
+
         while (timer > 0)
         {
             if (interactCooldownText != null)
-                interactCooldownText.text = $"Interact in: {timer:F1}s";
+                interactCooldownText.text = $"{timer:F0}";
             timer -= Time.deltaTime;
             yield return null;
         }
 
         if (interactCooldownText != null)
             interactCooldownText.text = "";
+
+        if (interactCooldownCanvas != null)
+            interactCooldownCanvas.SetActive(false);
+
         isOnCooldown = false;
     }
 
@@ -203,8 +208,6 @@ public class CodeCheckGame : MonoBehaviour
 
     public void TamperCode()
     {
-        Debug.Log("CodeCheckGame has been tampered with!");
-
         if (codeInputField != null)
         {
             string currentText = codeInputField.text;

@@ -3,21 +3,22 @@
 public class InterCom : MonoBehaviour
 {
     [Header("Spawn Settings")]
-    public Collider2D[] spawnAreas;              // Assign in Inspector
-    public float minDistanceBetweenObjects = 3f; // Minimum spacing between InterComs
+    public Collider2D[] spawnAreas;
+    public float minDistanceBetweenObjects = 3f;
+    public LayerMask obstacleLayer; // NEW: assign obstacle/wall layer here
 
-    [Header("Interaction Settings")]
-    public KeyCode interactKey = KeyCode.F;      // Key to interact
+    [Header("Interaction Settings")]
+    public KeyCode interactKey = KeyCode.F;
 
-    [Header("References")]
-    public CodeCheckGame codeCheckGame;          // Drag your CodeCheckGame here
+    [Header("References")]
+    public CodeCheckGame codeCheckGame;
+    public GameManager gameManager; // Reference to check if game ended
 
-    private bool isPlayerNearby = false;
+    private bool isPlayerNearby = false;
 
     void Start()
     {
-        // Random spawn if spawn areas exist
-        if (spawnAreas != null && spawnAreas.Length > 0)
+        if (spawnAreas != null && spawnAreas.Length > 0)
         {
             Vector2 pos;
             int safety = 0;
@@ -30,7 +31,9 @@ public class InterCom : MonoBehaviour
                 );
                 safety++;
             }
-            while (!IsFarFromOtherInteractables(pos) && safety < 50);
+            // ✅ Now checks: far from other InterComs AND not inside obstacle colliders
+            while ((!IsFarFromOtherInteractables(pos) || Physics2D.OverlapCircle(pos, 0.5f, obstacleLayer))
+                   && safety < 50);
 
             transform.position = pos;
         }
@@ -52,11 +55,11 @@ public class InterCom : MonoBehaviour
 
     void Update()
     {
-        // Open panel if player is near, presses the key, and panel is not in cooldown
-        if (isPlayerNearby && Input.GetKeyDown(interactKey))
+        if (isPlayerNearby && Input.GetKeyDown(interactKey))
         {
             if (codeCheckGame != null && !codeCheckGame.isOnCooldown)
             {
+                if (gameManager != null && gameManager.gameEnded) return; // disable after game ends
                 codeCheckGame.OpenCodePanel();
             }
         }

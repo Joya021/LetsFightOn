@@ -13,6 +13,8 @@ public class GameManager : MonoBehaviour
         public string correctAnswer;
         public string startingInput;
     }
+    private bool nearWinStunTriggered = false;
+
 
     [Header("Timer")]
     public float gameDuration = 120f;
@@ -34,20 +36,28 @@ public class GameManager : MonoBehaviour
     public List<CodeCheckGame> allCodeGames;
     private HashSet<CodeCheckGame> correctObjects = new HashSet<CodeCheckGame>();
 
-    private bool gameEnded = false;
-    private bool isPaused = false;
+    [Header("Progress UI")]
+    public Text progressText;
 
     [Header("Player Reference")]
     public Transform player;
     private PlayerMovement playerMovement;
     private Vector2 playerStartPos;
-    private bool timerStarted = false;
+    [HideInInspector] public bool timerStarted = false;
 
     [Header("Random Stun Settings")]
     public float stunMinTime = 10f;
     public float stunMaxTime = 100f;
     private float stunTriggerTime;
     private bool stunTriggered = false;
+
+    [Header("Game State")]
+    public bool gameEnded = false;
+    private bool isPaused = false;
+
+    [Header("Game End Images")]
+    public GameObject winImage;
+    public GameObject loseImage;
 
     void Start()
     {
@@ -90,27 +100,11 @@ public class GameManager : MonoBehaviour
         }
 
         stunTriggerTime = Random.Range(Mathf.Max(stunMinTime, 5f), stunMaxTime);
-    }
 
-    public void StartInteractCooldown(CodeCheckGame target, float cooldownTime, Text cooldownText)
-    {
-        StartCoroutine(InteractCooldownRoutine(target, cooldownTime, cooldownText));
-    }
+        if (winImage != null) winImage.SetActive(false);
+        if (loseImage != null) loseImage.SetActive(false);
 
-    private IEnumerator InteractCooldownRoutine(CodeCheckGame target, float cooldownTime, Text cooldownText)
-    {
-        float timer = cooldownTime;
-        while (timer > 0)
-        {
-            if (cooldownText != null)
-                cooldownText.text = $"Interact in: {timer:F1}s";
-
-            timer -= Time.deltaTime;
-            yield return null;
-        }
-        if (cooldownText != null)
-            cooldownText.text = "";
-        target.isOnCooldown = false;
+        UpdateProgressText();
     }
 
     void Update()
@@ -174,11 +168,31 @@ public class GameManager : MonoBehaviour
         int seconds = Mathf.FloorToInt(remainingTime % 60f);
         timerText.text = $"{minutes:00}:{seconds:00}";
     }
+    private void TriggerNearWinStun()
+    {
+        Debug.Log("Near-win stun triggered!");
+
+        if (player == null) return;
+
+        HunterChaseAndHack hunter = FindObjectOfType<HunterChaseAndHack>();
+        if (hunter != null)
+            hunter.StartStunWarningCountdown(3);
+
+        Invoke(nameof(ApplyStun), 3f); // Same as first stun: 3 sec warning, then stun
+    }
 
     public void RegisterCorrectObject(CodeCheckGame obj)
     {
         if (correctObjects.Contains(obj)) return;
         correctObjects.Add(obj);
+        UpdateProgressText();
+
+        // Check for near-win stun
+        if (!nearWinStunTriggered && correctObjects.Count == allCodeGames.Count - 1)
+        {
+            nearWinStunTriggered = true;
+            TriggerNearWinStun();
+        }
 
         if (correctObjects.Count >= allCodeGames.Count)
             GameOver(true);
@@ -188,12 +202,42 @@ public class GameManager : MonoBehaviour
             hunter.NotifyCorrectObjectSolved(obj);
     }
 
+
+    public void UnregisterCorrectObject(CodeCheckGame obj)
+    {
+        if (correctObjects.Contains(obj))
+        {
+            correctObjects.Remove(obj);
+            UpdateProgressText();
+        }
+    }
+
+    private void UpdateProgressText()
+    {
+        if (progressText != null)
+            progressText.text = $"{correctObjects.Count}/{allCodeGames.Count}";
+    }
+
     void GameOver(bool won)
     {
         gameEnded = true;
+
+        Debug.Log($"Game Over called. Won = {won}");
+
         endPanel.SetActive(true);
         endText.text = won ? " You Won!" : " Game Over";
         timerText.gameObject.SetActive(false);
+
+        if (winImage != null)
+        {
+            winImage.SetActive(won);
+            Debug.Log("Win image active: " + won);
+        }
+        if (loseImage != null)
+        {
+            loseImage.SetActive(!won);
+            Debug.Log("Lose image active: " + !won);
+        }
     }
 
     public void TogglePause()
@@ -224,7 +268,7 @@ public class GameManager : MonoBehaviour
         pauseMenuPanel.SetActive(false);
     }
 
-    void RestartGame()
+    public void RestartGame()
     {
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);

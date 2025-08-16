@@ -3,7 +3,7 @@ using UnityEngine.SceneManagement;
 
 public class PlayButton : MonoBehaviour
 {
-    public string gameSceneName = "GameScene";
+    public string gameSceneName = "game";
 
     public void PlayGame()
     {
