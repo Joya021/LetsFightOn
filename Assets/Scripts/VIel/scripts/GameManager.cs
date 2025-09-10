@@ -15,7 +15,6 @@ public class GameManager : MonoBehaviour
     }
     private bool nearWinStunTriggered = false;
 
-
     [Header("Timer")]
     public float gameDuration = 120f;
     private float remainingTime;
@@ -31,6 +30,25 @@ public class GameManager : MonoBehaviour
     public GameObject pauseMenuPanel;
     public Button pauseButton;
     public Button resumeButton;
+    public Button helpButton;
+    public Button settingsButton;
+
+    [Header("Help & Settings Panels")]
+    public GameObject helpPanel;
+    public GameObject settingsPanel;
+    public Button helpCloseButton;
+    public Button settingsCloseButton;
+
+    [Header("Quick Chat UI")]
+    public Button quickChatButton;
+    public GameObject quickChatPanel;
+    public Button[] quickChatMessageButtons; // Array of message buttons
+    public GameObject[] quickChatImages; // Array of images to show
+    public float quickChatImageDuration = 3f;
+    public float quickChatCooldown = 5f;
+    private float quickChatTimer = 0f;
+    private bool isQuickChatPanelOpen = false;
+    public Text quickChatWarningText; // Warning text for spam
 
     [Header("Correct Objects")]
     public List<CodeCheckGame> allCodeGames;
@@ -59,11 +77,23 @@ public class GameManager : MonoBehaviour
     public GameObject winImage;
     public GameObject loseImage;
 
+    [Header("Player HP System")]
+    public int maxHP = 6;
+    public int currentHP;
+    public GameObject[] heartIcons; // Array of heart UI elements
+    public GameObject gameOverPanel; // Panel to show when HP reaches 0
+
+    private UIManager uiManager;
+
     void Start()
     {
         remainingTime = gameDuration;
         endPanel.SetActive(false);
         pauseMenuPanel.SetActive(false);
+        currentHP = maxHP;
+
+        // Get UIManager
+        uiManager = FindObjectOfType<UIManager>();
 
         playAgainButton.onClick.AddListener(RestartGame);
         exitButton.onClick.AddListener(ExitGame);
@@ -73,6 +103,45 @@ public class GameManager : MonoBehaviour
 
         if (resumeButton != null)
             resumeButton.onClick.AddListener(ResumeGame);
+
+        // Help and Settings buttons
+        if (helpButton != null)
+            helpButton.onClick.AddListener(() => {
+                if (uiManager != null && helpPanel != null)
+                    uiManager.ShowPanel(helpPanel);
+            });
+
+        if (settingsButton != null)
+            settingsButton.onClick.AddListener(() => {
+                if (uiManager != null && settingsPanel != null)
+                    uiManager.ShowPanel(settingsPanel);
+            });
+
+        if (helpCloseButton != null)
+            helpCloseButton.onClick.AddListener(() => {
+                if (uiManager != null)
+                    uiManager.GoBack();
+            });
+
+        if (settingsCloseButton != null)
+            settingsCloseButton.onClick.AddListener(() => {
+                if (uiManager != null)
+                    uiManager.GoBack();
+            });
+
+        // Quick Chat setup
+        if (quickChatButton != null)
+            quickChatButton.onClick.AddListener(ToggleQuickChat);
+
+        if (quickChatPanel != null)
+            quickChatPanel.SetActive(false);
+
+        // Setup quick chat message buttons
+        for (int i = 0; i < quickChatMessageButtons.Length && i < quickChatImages.Length; i++)
+        {
+            int index = i; // Capture for closure
+            quickChatMessageButtons[i].onClick.AddListener(() => ShowQuickChatMessage(index));
+        }
 
         if (player != null)
         {
@@ -105,11 +174,27 @@ public class GameManager : MonoBehaviour
         if (loseImage != null) loseImage.SetActive(false);
 
         UpdateProgressText();
+        UpdateHeartDisplay();
     }
 
     void Update()
     {
         if (gameEnded || isPaused) return;
+
+        // Quick chat cooldown timer
+        if (quickChatTimer > 0)
+        {
+            quickChatTimer -= Time.deltaTime;
+            if (quickChatWarningText != null && quickChatTimer > 0)
+            {
+                quickChatWarningText.text = $"Quick Chat on cooldown: {quickChatTimer:F1}s";
+                quickChatWarningText.gameObject.SetActive(true);
+            }
+            else if (quickChatWarningText != null)
+            {
+                quickChatWarningText.gameObject.SetActive(false);
+            }
+        }
 
         if (!timerStarted && player != null)
         {
@@ -127,6 +212,77 @@ public class GameManager : MonoBehaviour
 
             if (remainingTime <= 0f)
                 GameOver(false);
+        }
+    }
+
+    void ToggleQuickChat()
+    {
+        if (quickChatTimer > 0)
+        {
+            // Show warning
+            if (quickChatWarningText != null)
+            {
+                quickChatWarningText.text = $"Please wait {quickChatTimer:F1}s before using Quick Chat again!";
+                quickChatWarningText.gameObject.SetActive(true);
+                StartCoroutine(HideWarningAfterDelay(2f));
+            }
+            return;
+        }
+
+        isQuickChatPanelOpen = !isQuickChatPanelOpen;
+        if (quickChatPanel != null)
+            quickChatPanel.SetActive(isQuickChatPanelOpen);
+    }
+
+    void ShowQuickChatMessage(int messageIndex)
+    {
+        if (messageIndex < quickChatImages.Length && quickChatImages[messageIndex] != null)
+        {
+            StartCoroutine(ShowQuickChatImageCoroutine(messageIndex));
+            quickChatTimer = quickChatCooldown;
+
+            // Close quick chat panel
+            isQuickChatPanelOpen = false;
+            if (quickChatPanel != null)
+                quickChatPanel.SetActive(false);
+        }
+    }
+
+    IEnumerator ShowQuickChatImageCoroutine(int imageIndex)
+    {
+        quickChatImages[imageIndex].SetActive(true);
+        yield return new WaitForSeconds(quickChatImageDuration);
+        quickChatImages[imageIndex].SetActive(false);
+    }
+
+    IEnumerator HideWarningAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (quickChatWarningText != null)
+            quickChatWarningText.gameObject.SetActive(false);
+    }
+
+    public void TakeDamage(bool hunterTampered = false)
+    {
+        if (hunterTampered) return; // Don't take damage if hunter tampered
+
+        currentHP--;
+        UpdateHeartDisplay();
+
+        if (currentHP <= 0)
+        {
+            GameOver(false);
+        }
+    }
+
+    void UpdateHeartDisplay()
+    {
+        for (int i = 0; i < heartIcons.Length; i++)
+        {
+            if (heartIcons[i] != null)
+            {
+                heartIcons[i].SetActive(i < currentHP);
+            }
         }
     }
 
@@ -168,6 +324,7 @@ public class GameManager : MonoBehaviour
         int seconds = Mathf.FloorToInt(remainingTime % 60f);
         timerText.text = $"{minutes:00}:{seconds:00}";
     }
+
     private void TriggerNearWinStun()
     {
         Debug.Log("Near-win stun triggered!");
@@ -178,7 +335,7 @@ public class GameManager : MonoBehaviour
         if (hunter != null)
             hunter.StartStunWarningCountdown(3);
 
-        Invoke(nameof(ApplyStun), 3f); // Same as first stun: 3 sec warning, then stun
+        Invoke(nameof(ApplyStun), 3f);
     }
 
     public void RegisterCorrectObject(CodeCheckGame obj)
@@ -187,7 +344,6 @@ public class GameManager : MonoBehaviour
         correctObjects.Add(obj);
         UpdateProgressText();
 
-        // Check for near-win stun
         if (!nearWinStunTriggered && correctObjects.Count == allCodeGames.Count - 1)
         {
             nearWinStunTriggered = true;
@@ -201,7 +357,6 @@ public class GameManager : MonoBehaviour
         if (hunter != null)
             hunter.NotifyCorrectObjectSolved(obj);
     }
-
 
     public void UnregisterCorrectObject(CodeCheckGame obj)
     {

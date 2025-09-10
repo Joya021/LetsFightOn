@@ -17,15 +17,16 @@ public class CodeCheckGame : MonoBehaviour
     public HunterChaseAndHack hunter;
     private PlayerMovement playerMovement;
     private GameObject playerObject;
+    public InterCom linkedIntercom;
 
     [Header("UI Elements")]
-    public InputField codeInputField; // No TMP
+    public InputField codeInputField;
     public Text taskText;
     public GameObject overlayPanel;
     public Button checkButton;
 
     [Header("Cooldown UI")]
-    public GameObject interactCooldownCanvas; // Background image + text container
+    public GameObject interactCooldownCanvas;
     public Text interactCooldownText;
 
     [Header("Target Object")]
@@ -43,9 +44,20 @@ public class CodeCheckGame : MonoBehaviour
     private TaskManager.CodeTask assignedTask;
     private bool isTriggered = false;
     private string savedInput = "";
+    private bool hasBeenSolved = false;
+    private bool lastAnswerWasHunterTampered = false; // Track if last failure was due to hunter tampering
 
     void Start()
     {
+        if (linkedIntercom == null)
+        {
+            linkedIntercom = GetComponent<InterCom>();
+            if (linkedIntercom == null)
+            {
+                Debug.LogWarning("No InterCom script found on this GameObject! Please ensure it's on the same object or assigned manually.");
+            }
+        }
+
         if (checkButton != null)
             checkButton.onClick.AddListener(CheckAnswer);
 
@@ -120,6 +132,11 @@ public class CodeCheckGame : MonoBehaviour
 
         isTriggered = true;
         if (playerMovement != null) playerMovement.LockMovement();
+
+        if (!hasBeenSolved && linkedIntercom != null)
+        {
+            linkedIntercom.OnInteractionComplete();
+        }
     }
 
     public void CloseCodePanel()
@@ -153,10 +170,25 @@ public class CodeCheckGame : MonoBehaviour
 
             if (hunter != null)
                 hunter.NotifyCorrectObjectSolved(this);
+
+            if (!hasBeenSolved)
+            {
+                hasBeenSolved = true;
+            }
+
+            lastAnswerWasHunterTampered = false; // Reset tamper flag on correct answer
         }
         else
         {
             SetObjectColor(Color.red);
+
+            // Player takes damage only if hunter didn't tamper with the code
+            if (gameManager != null)
+            {
+                gameManager.TakeDamage(lastAnswerWasHunterTampered);
+            }
+
+            lastAnswerWasHunterTampered = false; // Reset flag after processing
         }
 
         CloseCodePanel();
@@ -232,6 +264,14 @@ public class CodeCheckGame : MonoBehaviour
         }
 
         SetObjectColor(Color.red);
+
+        // Mark that the hunter tampered with this code
+        lastAnswerWasHunterTampered = true;
+
+        if (hasBeenSolved)
+        {
+            hasBeenSolved = false;
+        }
     }
 
     private char GetRandomChar()

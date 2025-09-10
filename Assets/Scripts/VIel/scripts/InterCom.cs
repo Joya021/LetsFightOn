@@ -1,11 +1,12 @@
 ﻿using UnityEngine;
+using System.Collections;
+using UnityEngine.UI;
 
 public class InterCom : MonoBehaviour
 {
     [Header("Spawn Settings")]
     public Collider2D[] spawnAreas;
     public float minDistanceBetweenObjects = 3f;
-    public LayerMask obstacleLayer; // NEW: assign obstacle/wall layer here
 
     [Header("Interaction Settings")]
     public KeyCode interactKey = KeyCode.F;
@@ -14,10 +15,19 @@ public class InterCom : MonoBehaviour
     public CodeCheckGame codeCheckGame;
     public GameManager gameManager; // Reference to check if game ended
 
+    // The GameObject that represents the icon to show on the minimap
+    [Header("Minimap Icon")]
+    [Tooltip("Assign the child GameObject that has a SpriteRenderer (your minimap dot).")]
+    public GameObject minimapIcon;
+
     private bool isPlayerNearby = false;
+
+    // 🚩 The minimap controller
+    private MiniMap minimapController;
 
     void Start()
     {
+        // Random spawn (your original logic)
         if (spawnAreas != null && spawnAreas.Length > 0)
         {
             Vector2 pos;
@@ -26,21 +36,20 @@ public class InterCom : MonoBehaviour
             {
                 Collider2D selectedSpawnArea = spawnAreas[Random.Range(0, spawnAreas.Length)];
                 pos = new Vector2(
-                  Random.Range(selectedSpawnArea.bounds.min.x, selectedSpawnArea.bounds.max.x),
-                  Random.Range(selectedSpawnArea.bounds.min.y, selectedSpawnArea.bounds.max.y)
+                    Random.Range(selectedSpawnArea.bounds.min.x, selectedSpawnArea.bounds.max.x),
+                    Random.Range(selectedSpawnArea.bounds.min.y, selectedSpawnArea.bounds.max.y)
                 );
                 safety++;
-            }
-            // ✅ Now checks: far from other InterComs AND not inside obstacle colliders
-            while ((!IsFarFromOtherInteractables(pos) || Physics2D.OverlapCircle(pos, 0.5f, obstacleLayer))
-                   && safety < 50);
-
+            } while (!IsFarFromOtherInteractables(pos) && safety < 50);
             transform.position = pos;
         }
         else
         {
-            Debug.LogWarning("⚠ No spawn area(s) assigned for InterCom!");
+            Debug.LogWarning("⚠ [InterCom] No spawn area(s) assigned!");
         }
+
+        // 🔎 Find the minimap controller in the scene
+        minimapController = FindObjectOfType<MiniMap>();
     }
 
     private bool IsFarFromOtherInteractables(Vector2 pos)
@@ -75,5 +84,15 @@ public class InterCom : MonoBehaviour
     {
         if (other.CompareTag("Player"))
             isPlayerNearby = false;
+    }
+
+    // 🔓 This method is called by CodeCheckGame when the player correctly solves the code
+    public void OnInteractionComplete()
+    {
+        // 🗺️ Tell the minimap to reveal this icon
+        if (minimapController != null && minimapIcon != null)
+        {
+            minimapController.RevealIntercom(minimapIcon);
+        }
     }
 }
