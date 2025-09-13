@@ -15,6 +15,16 @@ public class GameManager : MonoBehaviour
     }
     private bool nearWinStunTriggered = false;
 
+    [Header("Game Start Canvas")]
+    public GameObject gameStartCanvas;
+    public float gameStartDisplayTime = 3f;
+
+    [Header("Auto Start Settings")]
+    public bool useAutoStart = false; // Enable for online mode
+    public float autoStartDelay = 5f;
+    private float autoStartTimer;
+    private bool autoStartTriggered = false;
+
     [Header("Timer")]
     public float gameDuration = 120f;
     private float remainingTime;
@@ -25,6 +35,10 @@ public class GameManager : MonoBehaviour
     public Text endText;
     public Button playAgainButton;
     public Button exitButton;
+
+    [Header("Records Display")]
+    public GameObject recordsPanel;
+    public Text recordsText;
 
     [Header("Pause Menu UI")]
     public GameObject pauseMenuPanel;
@@ -42,13 +56,13 @@ public class GameManager : MonoBehaviour
     [Header("Quick Chat UI")]
     public Button quickChatButton;
     public GameObject quickChatPanel;
-    public Button[] quickChatMessageButtons; // Array of message buttons
-    public GameObject[] quickChatImages; // Array of images to show
+    public Button[] quickChatMessageButtons;
+    public GameObject[] quickChatImages;
     public float quickChatImageDuration = 3f;
     public float quickChatCooldown = 5f;
     private float quickChatTimer = 0f;
     private bool isQuickChatPanelOpen = false;
-    public Text quickChatWarningText; // Warning text for spam
+    public Text quickChatWarningText;
 
     [Header("Correct Objects")]
     public List<CodeCheckGame> allCodeGames;
@@ -80,8 +94,17 @@ public class GameManager : MonoBehaviour
     [Header("Player HP System")]
     public int maxHP = 6;
     public int currentHP;
-    public GameObject[] heartIcons; // Array of heart UI elements
-    public GameObject gameOverPanel; // Panel to show when HP reaches 0
+    public GameObject[] heartIcons;
+    public GameObject gameOverPanel;
+
+    // Player Records
+    [Header("Player Records")]
+    public bool isHunterMode = false; // Set this based on player role
+    private float gameStartTime;
+    private int codesDebuggedCount = 0;
+    private int codesInterruptedCount = 0;
+    private List<float> debuggingTimes = new List<float>();
+    private float currentCodeStartTime;
 
     private UIManager uiManager;
 
@@ -91,9 +114,17 @@ public class GameManager : MonoBehaviour
         endPanel.SetActive(false);
         pauseMenuPanel.SetActive(false);
         currentHP = maxHP;
+        gameStartTime = Time.time;
+        autoStartTimer = autoStartDelay;
 
         // Get UIManager
         uiManager = FindObjectOfType<UIManager>();
+
+        // Show game start canvas
+        if (gameStartCanvas != null)
+        {
+            StartCoroutine(ShowGameStartCanvas());
+        }
 
         playAgainButton.onClick.AddListener(RestartGame);
         exitButton.onClick.AddListener(ExitGame);
@@ -139,7 +170,7 @@ public class GameManager : MonoBehaviour
         // Setup quick chat message buttons
         for (int i = 0; i < quickChatMessageButtons.Length && i < quickChatImages.Length; i++)
         {
-            int index = i; // Capture for closure
+            int index = i;
             quickChatMessageButtons[i].onClick.AddListener(() => ShowQuickChatMessage(index));
         }
 
@@ -177,9 +208,27 @@ public class GameManager : MonoBehaviour
         UpdateHeartDisplay();
     }
 
+    private IEnumerator ShowGameStartCanvas()
+    {
+        gameStartCanvas.SetActive(true);
+        yield return new WaitForSeconds(gameStartDisplayTime);
+        gameStartCanvas.SetActive(false);
+    }
+
     void Update()
     {
         if (gameEnded || isPaused) return;
+
+        // Auto start timer for online mode
+        if (useAutoStart && !timerStarted && !autoStartTriggered)
+        {
+            autoStartTimer -= Time.deltaTime;
+            if (autoStartTimer <= 0f)
+            {
+                timerStarted = true;
+                autoStartTriggered = true;
+            }
+        }
 
         // Quick chat cooldown timer
         if (quickChatTimer > 0)
@@ -187,7 +236,7 @@ public class GameManager : MonoBehaviour
             quickChatTimer -= Time.deltaTime;
             if (quickChatWarningText != null && quickChatTimer > 0)
             {
-                quickChatWarningText.text = $"Quick Chat on cooldown: {quickChatTimer:F1}s";
+                quickChatWarningText.text = $"{quickChatTimer:F1}s";
                 quickChatWarningText.gameObject.SetActive(true);
             }
             else if (quickChatWarningText != null)
@@ -196,7 +245,7 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (!timerStarted && player != null)
+        if (!timerStarted && player != null && !useAutoStart)
         {
             if (Vector2.Distance(player.position, playerStartPos) > 0.01f)
                 timerStarted = true;
@@ -215,14 +264,46 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    public void StartCodeDebugging()
+    {
+        currentCodeStartTime = Time.time;
+    }
+
+    public void FinishCodeDebugging(bool success)
+    {
+        float debugTime = Time.time - currentCodeStartTime;
+        if (success)
+        {
+            debuggingTimes.Add(debugTime);
+            codesDebuggedCount++;
+        }
+    }
+
+    public void RecordCodeInterrupted()
+    {
+        if (isHunterMode)
+            codesInterruptedCount++;
+    }
+
+    private float GetAverageDebuggingTime()
+    {
+        if (debuggingTimes.Count == 0) return 0f;
+
+        float total = 0f;
+        foreach (float time in debuggingTimes)
+        {
+            total += time;
+        }
+        return total / debuggingTimes.Count;
+    }
+
     void ToggleQuickChat()
     {
         if (quickChatTimer > 0)
         {
-            // Show warning
             if (quickChatWarningText != null)
             {
-                quickChatWarningText.text = $"Please wait {quickChatTimer:F1}s before using Quick Chat again!";
+                quickChatWarningText.text = $" {quickChatTimer:F1}";
                 quickChatWarningText.gameObject.SetActive(true);
                 StartCoroutine(HideWarningAfterDelay(2f));
             }
@@ -241,7 +322,6 @@ public class GameManager : MonoBehaviour
             StartCoroutine(ShowQuickChatImageCoroutine(messageIndex));
             quickChatTimer = quickChatCooldown;
 
-            // Close quick chat panel
             isQuickChatPanelOpen = false;
             if (quickChatPanel != null)
                 quickChatPanel.SetActive(false);
@@ -264,7 +344,7 @@ public class GameManager : MonoBehaviour
 
     public void TakeDamage(bool hunterTampered = false)
     {
-        if (hunterTampered) return; // Don't take damage if hunter tampered
+        if (hunterTampered) return;
 
         currentHP--;
         UpdateHeartDisplay();
@@ -379,6 +459,9 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"Game Over called. Won = {won}");
 
+        // Show records
+        ShowPlayerRecords(won);
+
         endPanel.SetActive(true);
         endText.text = won ? " You Won!" : " Game Over";
         timerText.gameObject.SetActive(false);
@@ -392,6 +475,34 @@ public class GameManager : MonoBehaviour
         {
             loseImage.SetActive(!won);
             Debug.Log("Lose image active: " + !won);
+        }
+    }
+
+    private void ShowPlayerRecords(bool won)
+    {
+        if (recordsPanel != null && recordsText != null)
+        {
+            recordsPanel.SetActive(true);
+
+            string recordsString = "";
+            int xpGained = won ? 100 : 50;
+
+            if (isHunterMode)
+            {
+                recordsString = $"Hunter Mode: {(won ? "You Won!" : "You Lost!")}\n" +
+                               $"+{xpGained} XP\n" +
+                               $"Codes Interrupted: {codesInterruptedCount}";
+            }
+            else
+            {
+                float avgTime = GetAverageDebuggingTime();
+                recordsString = $"Survivor Mode: {(won ? "You Won!" : "You Lost!")}\n" +
+                               $"+{xpGained} XP\n" +
+                               $"Debugging Time Average: {avgTime:F1} seconds\n" +
+                               $"Codes Debugged: {codesDebuggedCount}";
+            }
+
+            recordsText.text = recordsString;
         }
     }
 

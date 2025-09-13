@@ -7,9 +7,12 @@ public class InterCom : MonoBehaviour
     [Header("Spawn Settings")]
     public Collider2D[] spawnAreas;
     public float minDistanceBetweenObjects = 3f;
+    public LayerMask obstacleLayerMask = -1; // Layers to avoid when spawning
+    public float spawnCheckRadius = 0.5f;
 
     [Header("Interaction Settings")]
     public KeyCode interactKey = KeyCode.F;
+    public string playerTag = "Player"; // Specify which tag should trigger interaction
 
     [Header("References")]
     public CodeCheckGame codeCheckGame;
@@ -22,7 +25,7 @@ public class InterCom : MonoBehaviour
 
     private bool isPlayerNearby = false;
 
-    // 🚩 The minimap controller
+    // The minimap controller
     private MiniMap minimapController;
 
     void Start()
@@ -45,10 +48,10 @@ public class InterCom : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("⚠ [InterCom] No spawn area(s) assigned!");
+            Debug.LogWarning("⚠️ [InterCom] No spawn area(s) assigned!");
         }
 
-        // 🔎 Find the minimap controller in the scene
+        // Find the minimap controller in the scene
         minimapController = FindObjectOfType<MiniMap>();
     }
 
@@ -60,6 +63,23 @@ public class InterCom : MonoBehaviour
                 return false;
         }
         return true;
+    }
+
+    private bool IsPositionBlocked(Vector2 pos)
+    {
+        // Check if there are any colliders at this position that we should avoid
+        Collider2D[] overlapping = Physics2D.OverlapCircleAll(pos, spawnCheckRadius, obstacleLayerMask);
+
+        // Filter out trigger colliders (we only care about solid obstacles)
+        foreach (Collider2D col in overlapping)
+        {
+            if (!col.isTrigger)
+            {
+                return true; // Position is blocked by a solid collider
+            }
+        }
+
+        return false; // Position is clear
     }
 
     void Update()
@@ -76,20 +96,26 @@ public class InterCom : MonoBehaviour
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        // Only respond to objects with the specific player tag
+        if (other.CompareTag(playerTag))
+        {
             isPlayerNearby = true;
+        }
     }
 
     void OnTriggerExit2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        // Only respond to objects with the specific player tag
+        if (other.CompareTag(playerTag))
+        {
             isPlayerNearby = false;
+        }
     }
 
-    // 🔓 This method is called by CodeCheckGame when the player correctly solves the code
+    // This method is called by CodeCheckGame when the player correctly solves the code
     public void OnInteractionComplete()
     {
-        // 🗺️ Tell the minimap to reveal this icon
+        // Tell the minimap to reveal this icon
         if (minimapController != null && minimapIcon != null)
         {
             minimapController.RevealIntercom(minimapIcon);

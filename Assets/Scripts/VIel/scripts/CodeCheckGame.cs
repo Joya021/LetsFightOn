@@ -25,6 +25,11 @@ public class CodeCheckGame : MonoBehaviour
     public GameObject overlayPanel;
     public Button checkButton;
 
+    [Header("Answer Feedback Images")]
+    public GameObject[] correctAnswerImages; // Array of images to show randomly when correct
+    public GameObject wrongAnswerImage; // Image to show when wrong
+    public float answerImageDisplayTime = 2f;
+
     [Header("Cooldown UI")]
     public GameObject interactCooldownCanvas;
     public Text interactCooldownText;
@@ -45,7 +50,7 @@ public class CodeCheckGame : MonoBehaviour
     private bool isTriggered = false;
     private string savedInput = "";
     private bool hasBeenSolved = false;
-    private bool lastAnswerWasHunterTampered = false; // Track if last failure was due to hunter tampering
+    private bool lastAnswerWasHunterTampered = false;
 
     void Start()
     {
@@ -69,6 +74,16 @@ public class CodeCheckGame : MonoBehaviour
 
         if (interactCooldownCanvas != null)
             interactCooldownCanvas.SetActive(false);
+
+        // Hide answer feedback images at start
+        if (wrongAnswerImage != null)
+            wrongAnswerImage.SetActive(false);
+
+        foreach (GameObject img in correctAnswerImages)
+        {
+            if (img != null)
+                img.SetActive(false);
+        }
 
         playerObject = GameObject.FindGameObjectWithTag("Player");
         if (playerObject != null)
@@ -133,6 +148,10 @@ public class CodeCheckGame : MonoBehaviour
         isTriggered = true;
         if (playerMovement != null) playerMovement.LockMovement();
 
+        // Start tracking debugging time
+        if (gameManager != null)
+            gameManager.StartCodeDebugging();
+
         if (!hasBeenSolved && linkedIntercom != null)
         {
             linkedIntercom.OnInteractionComplete();
@@ -166,7 +185,10 @@ public class CodeCheckGame : MonoBehaviour
             SetObjectColor(Color.green);
 
             if (gameManager != null)
+            {
                 gameManager.RegisterCorrectObject(this);
+                gameManager.FinishCodeDebugging(true); // Record successful debugging
+            }
 
             if (hunter != null)
                 hunter.NotifyCorrectObjectSolved(this);
@@ -176,7 +198,10 @@ public class CodeCheckGame : MonoBehaviour
                 hasBeenSolved = true;
             }
 
-            lastAnswerWasHunterTampered = false; // Reset tamper flag on correct answer
+            lastAnswerWasHunterTampered = false;
+
+            // Show random correct answer image
+            StartCoroutine(ShowCorrectAnswerImage());
         }
         else
         {
@@ -186,15 +211,43 @@ public class CodeCheckGame : MonoBehaviour
             if (gameManager != null)
             {
                 gameManager.TakeDamage(lastAnswerWasHunterTampered);
+                gameManager.FinishCodeDebugging(false); // Record failed debugging
             }
 
-            lastAnswerWasHunterTampered = false; // Reset flag after processing
+            lastAnswerWasHunterTampered = false;
+
+            // Show wrong answer image
+            StartCoroutine(ShowWrongAnswerImage());
         }
 
         CloseCodePanel();
 
         if (!string.IsNullOrEmpty(userInput) && !isOnCooldown)
             StartCoroutine(InteractCooldownRoutine());
+    }
+
+    private IEnumerator ShowCorrectAnswerImage()
+    {
+        if (correctAnswerImages.Length > 0)
+        {
+            int randomIndex = Random.Range(0, correctAnswerImages.Length);
+            if (correctAnswerImages[randomIndex] != null)
+            {
+                correctAnswerImages[randomIndex].SetActive(true);
+                yield return new WaitForSeconds(answerImageDisplayTime);
+                correctAnswerImages[randomIndex].SetActive(false);
+            }
+        }
+    }
+
+    private IEnumerator ShowWrongAnswerImage()
+    {
+        if (wrongAnswerImage != null)
+        {
+            wrongAnswerImage.SetActive(true);
+            yield return new WaitForSeconds(answerImageDisplayTime);
+            wrongAnswerImage.SetActive(false);
+        }
     }
 
     private IEnumerator InteractCooldownRoutine()
@@ -267,6 +320,10 @@ public class CodeCheckGame : MonoBehaviour
 
         // Mark that the hunter tampered with this code
         lastAnswerWasHunterTampered = true;
+
+        // Record code interruption
+        if (gameManager != null)
+            gameManager.RecordCodeInterrupted();
 
         if (hasBeenSolved)
         {
