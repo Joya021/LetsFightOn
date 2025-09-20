@@ -11,6 +11,9 @@ public class PlayerMovement : MonoBehaviour
     public Rigidbody2D rb;
     public bool canMove = true;
 
+    [Header("Audio Settings")]
+    public bool isSurvivor = true; // Set this based on player type
+
     [Header("UI - Stun Ability Cooldown")]
     public GameObject stunCooldownCanvas;
     public Text stunCooldownText;
@@ -30,6 +33,7 @@ public class PlayerMovement : MonoBehaviour
     private Collider2D playerCollider;
     Vector2 movement;
     private bool moving;
+    private bool wasMovingLastFrame = false; // Track movement state changes
     private Vector2 lastDirection;  // Keep track of the last direction
     private bool isAttacking = false; // Track whether the player is attacking
     private bool attackInputReceived = false;  // To ensure the input is only processed once per attack
@@ -102,6 +106,14 @@ public class PlayerMovement : MonoBehaviour
             rb.velocity = Vector2.zero;
             animk.SetFloat("X", movement.x);
             animk.SetFloat("Y", movement.y);
+
+            // Stop walking sound if player can't move
+            if (wasMovingLastFrame && AudioManager.Instance != null)
+            {
+                AudioManager.Instance.StopWalking();
+                wasMovingLastFrame = false;
+            }
+
             return;
         }
 
@@ -119,6 +131,30 @@ public class PlayerMovement : MonoBehaviour
 
         // Animate based on movement
         Animate();
+
+        // Handle walking audio
+        HandleWalkingAudio();
+    }
+
+    private void HandleWalkingAudio()
+    {
+        bool currentlyMoving = movement.magnitude > 0.1f;
+
+        // If we started moving this frame
+        if (currentlyMoving && !wasMovingLastFrame && AudioManager.Instance != null)
+        {
+            if (isSurvivor)
+                AudioManager.Instance.StartSurvivorWalking();
+            else
+                AudioManager.Instance.StartHunterWalking();
+        }
+        // If we stopped moving this frame
+        else if (!currentlyMoving && wasMovingLastFrame && AudioManager.Instance != null)
+        {
+            AudioManager.Instance.StopWalking();
+        }
+
+        wasMovingLastFrame = currentlyMoving;
     }
 
     private void Animate()
@@ -164,11 +200,7 @@ public class PlayerMovement : MonoBehaviour
         isAttacking = true;
         attackInputReceived = true;  // Mark that the attack input was received
 
-        // Optionally: You could add a cooldown before the attack animation resets, for example:
-        // StartCoroutine(ResetAttackAnimationAfterDelay(0.5f)); // Reset attack animation after 0.5 seconds (adjust as needed)
-
-        // Reset after animation finishes (You can do this with animation events or just a delay)
-        // Here, I will reset the attack animation after 0.5 seconds (adjust timing based on the animation length)
+        // Reset after animation finishes
         StartCoroutine(ResetAttackAnimationAfterDelay(0.5f));
     }
 

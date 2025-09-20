@@ -8,11 +8,10 @@ public class InterCom : MonoBehaviour
     public Collider2D[] spawnAreas;
     public float minDistanceBetweenObjects = 3f;
     public LayerMask obstacleLayerMask = -1; // Layers to avoid when spawning
-    public float spawnCheckRadius = 0.5f;
+    public float spawnCheckRadius = 0.5f; // Radius to check for obstacles
 
     [Header("Interaction Settings")]
     public KeyCode interactKey = KeyCode.F;
-    public string playerTag = "Player"; // Specify which tag should trigger interaction
 
     [Header("References")]
     public CodeCheckGame codeCheckGame;
@@ -25,8 +24,8 @@ public class InterCom : MonoBehaviour
 
     private bool isPlayerNearby = false;
 
-    // The minimap controller
-    private MiniMap minimapController;
+    // The minimap controller - using the correct class name from your scripts
+    private MinimapController minimapController;
 
     void Start()
     {
@@ -43,16 +42,16 @@ public class InterCom : MonoBehaviour
                     Random.Range(selectedSpawnArea.bounds.min.y, selectedSpawnArea.bounds.max.y)
                 );
                 safety++;
-            } while (!IsFarFromOtherInteractables(pos) && safety < 50);
+            } while ((!IsFarFromOtherInteractables(pos) || IsPositionBlocked(pos)) && safety < 100);
             transform.position = pos;
         }
         else
         {
-            Debug.LogWarning("⚠️ [InterCom] No spawn area(s) assigned!");
+            Debug.LogWarning("No spawn area(s) assigned!");
         }
 
-        // Find the minimap controller in the scene
-        minimapController = FindObjectOfType<MiniMap>();
+        // Find the minimap controller in the scene - using correct class name
+        minimapController = FindObjectOfType<MinimapController>();
     }
 
     private bool IsFarFromOtherInteractables(Vector2 pos)
@@ -73,7 +72,7 @@ public class InterCom : MonoBehaviour
         // Filter out trigger colliders (we only care about solid obstacles)
         foreach (Collider2D col in overlapping)
         {
-            if (!col.isTrigger)
+            if (col != null && !col.isTrigger)
             {
                 return true; // Position is blocked by a solid collider
             }
@@ -89,6 +88,11 @@ public class InterCom : MonoBehaviour
             if (codeCheckGame != null && !codeCheckGame.isOnCooldown)
             {
                 if (gameManager != null && gameManager.gameEnded) return; // disable after game ends
+
+                // Play intercom interact sound
+                if (AudioManager.Instance != null)
+                    AudioManager.Instance.PlayIntercomInteract();
+
                 codeCheckGame.OpenCodePanel();
             }
         }
@@ -96,29 +100,23 @@ public class InterCom : MonoBehaviour
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        // Only respond to objects with the specific player tag
-        if (other.CompareTag(playerTag))
-        {
+        if (other.CompareTag("Player"))
             isPlayerNearby = true;
-        }
     }
 
     void OnTriggerExit2D(Collider2D other)
     {
-        // Only respond to objects with the specific player tag
-        if (other.CompareTag(playerTag))
-        {
+        if (other.CompareTag("Player"))
             isPlayerNearby = false;
-        }
     }
 
     // This method is called by CodeCheckGame when the player correctly solves the code
     public void OnInteractionComplete()
     {
-        // Tell the minimap to reveal this icon
+        // Tell the minimap to reveal this icon - using correct method name
         if (minimapController != null && minimapIcon != null)
         {
-            minimapController.RevealIntercom(minimapIcon);
+            minimapController.RevealIntercomLayer();
         }
     }
 }

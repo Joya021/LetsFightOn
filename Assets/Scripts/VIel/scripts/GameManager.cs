@@ -14,6 +14,10 @@ public class GameManager : MonoBehaviour
         public string startingInput;
     }
     private bool nearWinStunTriggered = false;
+    [Header("Multiplayer Settings")]
+    public bool isMultiplayerMode = false; // Set to true for online mode
+    public int localPlayerId = 0; // This player's ID
+    public bool localPlayerIsSurvivor = true;
 
     [Header("Game Start Canvas")]
     public GameObject gameStartCanvas;
@@ -319,15 +323,43 @@ public class GameManager : MonoBehaviour
     {
         if (messageIndex < quickChatImages.Length && quickChatImages[messageIndex] != null)
         {
+            // Show locally
             StartCoroutine(ShowQuickChatImageCoroutine(messageIndex));
             quickChatTimer = quickChatCooldown;
 
+            // If multiplayer, also show on multiplayer UI
+            if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
+            {
+                MultiplayerUIManager.Instance.ShowPlayerQuickChat(localPlayerId, messageIndex);
+            }
+
+            // Close quick chat panel
             isQuickChatPanelOpen = false;
             if (quickChatPanel != null)
                 quickChatPanel.SetActive(false);
         }
     }
-
+    public void OnPlayerDeath(int playerId)
+    {
+        if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
+        {
+            MultiplayerUIManager.Instance.SetPlayerAliveStatus(playerId, false);
+        }
+    }
+    public void AddPlayerToUI(int playerId, string playerName, bool isSurvivor, int characterIndex)
+    {
+        if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
+        {
+            MultiplayerUIManager.Instance.AddPlayer(playerId, playerName, isSurvivor, characterIndex);
+        }
+    }
+    public void RemovePlayerFromUI(int playerId)
+    {
+        if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
+        {
+            MultiplayerUIManager.Instance.RemovePlayer(playerId);
+        }
+    }
     IEnumerator ShowQuickChatImageCoroutine(int imageIndex)
     {
         quickChatImages[imageIndex].SetActive(true);

@@ -1,30 +1,25 @@
 ﻿using UnityEngine;
 using System.Collections;
-using UnityEngine.UI;
 
 public class HunterChaseAndHack : MonoBehaviour
 {
     [Header("References")]
     public Transform player;
+    public Rigidbody2D rb;
 
     [Header("Notify UI")]
-    public GameObject notificationCanvas; // Background + text
-    public Text notificationText;
+    public GameObject notificationCanvas;
+    public UnityEngine.UI.Text notificationText;
 
     [Header("Stun Warning UI")]
-    public GameObject countdownCanvas; // Background + text
-    public Text countdownText;
+    public GameObject countdownCanvas;
+    public UnityEngine.UI.Text countdownText;
 
     [Header("Movement")]
     public float moveSpeed = 2f;
     public float slowMoveSpeed = 0.8f;
     public float hackRange = 1.5f;
     public float stopDistance = 0.2f;
-
-    [Header("Obstacle Avoidance")]
-    public LayerMask obstacleLayer;
-    public float avoidanceDistance = 1f;
-    public float avoidanceTurnSpeed = 1f;
 
     [Header("Hack Settings")]
     public int maxHacks = 2;
@@ -34,24 +29,35 @@ public class HunterChaseAndHack : MonoBehaviour
     public float minTamperDelay = 3f;
     public float maxTamperDelay = 10f;
 
-    private Rigidbody2D rb;
     private StunnableScript stunScript;
-    private Vector2 playerStartPos;
     private bool playerHasMoved = false;
+    private Vector2 playerStartPos;
     private bool isHacking = false;
     private int hackCount = 0;
-    private Vector2 currentMoveDirection;
 
     private CodeCheckGame currentTarget;
     private CodeCheckGame lastCorrectlySolvedObject;
     private bool chasingPlayer = true;
-    private bool isCollidingWithObstacle = false;
+
     private Coroutine tamperDelayCoroutine;
+
+    void Awake()
+    {
+        if (rb == null)
+            rb = GetComponent<Rigidbody2D>();
+
+        if (rb == null)
+        {
+            Debug.LogError("Hunter is missing Rigidbody2D component!", this);
+            enabled = false;
+            return;
+        }
+
+        stunScript = GetComponent<StunnableScript>();
+    }
 
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
-        stunScript = GetComponent<StunnableScript>();
         if (player != null)
             playerStartPos = player.position;
 
@@ -72,57 +78,41 @@ public class HunterChaseAndHack : MonoBehaviour
 
     void FixedUpdate()
     {
-        if ((stunScript != null && stunScript.IsStunned) || isHacking)
+        if (stunScript != null && stunScript.IsStunned || isHacking || player == null || !playerHasMoved)
         {
             rb.velocity = Vector2.zero;
             return;
         }
 
-        if (playerHasMoved && player != null)
+        Vector2 targetPosition;
+
+        if (lastCorrectlySolvedObject != null && lastCorrectlySolvedObject.triggeredObject != null && hackCount < maxHacks)
         {
-            Vector2 targetPosition;
-            float currentMoveSpeed = isCollidingWithObstacle ? slowMoveSpeed : moveSpeed;
+            targetPosition = lastCorrectlySolvedObject.triggeredObject.transform.position;
+            chasingPlayer = false;
+        }
+        else
+        {
+            targetPosition = player.position;
+            chasingPlayer = true;
+        }
 
-            if (lastCorrectlySolvedObject != null && lastCorrectlySolvedObject.triggeredObject != null && hackCount < maxHacks)
-            {
-                targetPosition = lastCorrectlySolvedObject.triggeredObject.transform.position;
-                chasingPlayer = false;
-            }
-            else
-            {
-                targetPosition = player.position;
-                chasingPlayer = true;
-            }
+        float distToTarget = Vector2.Distance(transform.position, targetPosition);
 
-            Vector2 desiredDirection = (targetPosition - (Vector2)transform.position).normalized;
+        if ((chasingPlayer && distToTarget <= stopDistance) || (!chasingPlayer && distToTarget <= hackRange))
+        {
+            rb.velocity = Vector2.zero;
 
-            RaycastHit2D hit = Physics2D.Raycast(transform.position, desiredDirection, avoidanceDistance, obstacleLayer);
-            if (hit.collider != null)
+            if (!chasingPlayer && lastCorrectlySolvedObject != null)
             {
-                float angle = Vector2.SignedAngle(desiredDirection, hit.normal);
-                desiredDirection = Quaternion.Euler(0, 0, angle > 0 ? 90 : -90) * desiredDirection;
-            }
-            currentMoveDirection = Vector2.Lerp(currentMoveDirection, desiredDirection, avoidanceTurnSpeed * Time.fixedDeltaTime);
-
-            if ((chasingPlayer && Vector2.Distance(transform.position, player.position) <= stopDistance) ||
-                (!chasingPlayer && Vector2.Distance(transform.position, targetPosition) <= hackRange))
-            {
-                rb.velocity = Vector2.zero;
-
-                if (!chasingPlayer && lastCorrectlySolvedObject != null)
-                {
-                    StartCoroutine(StunCountdownAndHack(lastCorrectlySolvedObject, lastCorrectlySolvedObject.triggeredObject.transform));
-                    lastCorrectlySolvedObject = null;
-                }
-            }
-            else
-            {
-                rb.velocity = currentMoveDirection.normalized * currentMoveSpeed;
+                StartCoroutine(StunCountdownAndHack(lastCorrectlySolvedObject, lastCorrectlySolvedObject.triggeredObject.transform));
+                lastCorrectlySolvedObject = null;
             }
         }
         else
         {
-            rb.velocity = Vector2.zero;
+            Vector2 direction = (targetPosition - (Vector2)transform.position).normalized;
+            rb.velocity = direction * moveSpeed;
         }
     }
 
@@ -149,14 +139,16 @@ public class HunterChaseAndHack : MonoBehaviour
     IEnumerator StunCountdownAndHack(CodeCheckGame target, Transform interactable)
     {
         if (hackCount >= maxHacks) yield break;
+
         isHacking = true;
 
-        while (Vector3.Distance(transform.position, interactable.position) > hackRange)
+        while (Vector2.Distance(transform.position, interactable.position) > hackRange)
         {
-            Vector2 direction = (interactable.position - transform.position).normalized;
+            Vector2 direction = ((Vector2)interactable.position - (Vector2)transform.position).normalized;
             rb.velocity = direction * moveSpeed;
-            yield return new WaitForFixedUpdate();
+            yield return new WaitForSeconds(0.1f);
         }
+
         rb.velocity = Vector2.zero;
 
         currentTarget = target;
@@ -173,20 +165,21 @@ public class HunterChaseAndHack : MonoBehaviour
 
         currentTarget.TamperCode();
 
-        // Remove from solved list if it was solved before
-        GameManager gm = FindObjectOfType<GameManager>();
-        if (gm != null)
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlayHunterInterruptCode();
+
+        if (GameObject.FindObjectOfType<GameManager>() is GameManager gm)
             gm.UnregisterCorrectObject(currentTarget);
 
-        ShowNotification("⚠ Hunter tampered with your code!");
+        ShowNotification("⚠️ Hunter tampered with your code!");
         StartCoroutine(FlashInputField());
     }
-
 
     void ShowNotification(string message)
     {
         if (notificationCanvas == null || notificationText == null) return;
-        StopCoroutine(nameof(ShowNotificationRoutine));
+
+        StopAllCoroutines();
         StartCoroutine(ShowNotificationRoutine(message));
     }
 
@@ -201,7 +194,8 @@ public class HunterChaseAndHack : MonoBehaviour
     IEnumerator FlashInputField()
     {
         if (currentTarget == null || currentTarget.codeInputField == null) yield break;
-        Graphic inputGraphic = currentTarget.codeInputField.GetComponent<Graphic>();
+
+        UnityEngine.UI.Graphic inputGraphic = currentTarget.codeInputField.GetComponent<UnityEngine.UI.Graphic>();
         if (inputGraphic != null)
         {
             Color originalColor = inputGraphic.color;
@@ -228,17 +222,5 @@ public class HunterChaseAndHack : MonoBehaviour
             lastCorrectlySolvedObject = target;
         else
             lastCorrectlySolvedObject = null;
-    }
-
-    void OnTriggerEnter2D(Collider2D other)
-    {
-        if (other.gameObject.layer == LayerMask.NameToLayer("lobstacle"))
-            isCollidingWithObstacle = true;
-    }
-
-    void OnTriggerExit2D(Collider2D other)
-    {
-        if (other.gameObject.layer == LayerMask.NameToLayer("lobstacle"))
-            isCollidingWithObstacle = false;
     }
 }

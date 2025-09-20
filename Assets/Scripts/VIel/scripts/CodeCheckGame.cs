@@ -184,6 +184,10 @@ public class CodeCheckGame : MonoBehaviour
         {
             SetObjectColor(Color.green);
 
+            // Play correct answer sound
+            if (AudioManager.Instance != null)
+                AudioManager.Instance.PlayCorrectAnswer();
+
             if (gameManager != null)
             {
                 gameManager.RegisterCorrectObject(this);
@@ -206,6 +210,10 @@ public class CodeCheckGame : MonoBehaviour
         else
         {
             SetObjectColor(Color.red);
+
+            // Play wrong answer sound
+            if (AudioManager.Instance != null)
+                AudioManager.Instance.PlayWrongAnswer();
 
             // Player takes damage only if hunter didn't tamper with the code
             if (gameManager != null)
@@ -317,6 +325,10 @@ public class CodeCheckGame : MonoBehaviour
         }
 
         SetObjectColor(Color.red);
+
+        // Play code interrupted sound
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlayCodeInterrupted();
 
         // Mark that the hunter tampered with this code
         lastAnswerWasHunterTampered = true;
