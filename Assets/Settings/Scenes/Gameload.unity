@@ -861,6 +861,10 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7249970958136449514, guid: 1caca2d8671029e408a7f73876b8994c, type: 3}
+      propertyPath: nextSceneName
+      value: JuneScene
+      objectReference: {fileID: 0}
     - target: {fileID: 7551064087300784253, guid: 1caca2d8671029e408a7f73876b8994c, type: 3}
       propertyPath: m_SizeDelta.x
       value: 1920
@@ -4527,7 +4531,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   countdownTime: 15
-  nextSceneName: game
+  nextSceneName: JuneScene
   countdownText: {fileID: 8474604644322233117}
 --- !u!1 &8249628283076937681
 GameObject:
@@ -4912,7 +4916,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6232762481275808099}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0a0b22c52a465d8408a1ea3798e5d5c3, type: 3}
   m_Name: 
