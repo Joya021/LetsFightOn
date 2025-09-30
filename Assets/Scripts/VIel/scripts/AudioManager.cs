@@ -4,7 +4,7 @@ public class AudioManager : MonoBehaviour
 {
     [Header("Audio Sources")]
     public AudioSource sfxSource;
-    public AudioSource walkingSource; // Separate source for looping walking sounds
+    public AudioSource walkingSource;
 
     [Header("UI Sound Effects")]
     public AudioClip correctAnswerClip;
@@ -41,7 +41,7 @@ public class AudioManager : MonoBehaviour
             return;
         }
 
-        // Set up audio sources if not assigned
+       
         if (sfxSource == null)
         {
             sfxSource = gameObject.AddComponent<AudioSource>();

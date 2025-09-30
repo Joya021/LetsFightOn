@@ -24,8 +24,8 @@ public class InterCom : MonoBehaviour
 
     private bool isPlayerNearby = false;
 
-    // The minimap controller - using the correct class name from your scripts
-    private MinimapController minimapController;
+    // The minimap controller - corrected to use MiniMap class
+    private MiniMap miniMap;
 
     void Start()
     {
@@ -51,7 +51,7 @@ public class InterCom : MonoBehaviour
         }
 
         // Find the minimap controller in the scene - using correct class name
-        minimapController = FindObjectOfType<MinimapController>();
+        miniMap = FindObjectOfType<MiniMap>();
     }
 
     private bool IsFarFromOtherInteractables(Vector2 pos)
@@ -113,10 +113,10 @@ public class InterCom : MonoBehaviour
     // This method is called by CodeCheckGame when the player correctly solves the code
     public void OnInteractionComplete()
     {
-        // Tell the minimap to reveal this icon - using correct method name
-        if (minimapController != null && minimapIcon != null)
+        // Tell the minimap to reveal this icon - using correct method and passing the icon GameObject
+        if (miniMap != null && minimapIcon != null)
         {
-            minimapController.RevealIntercomLayer();
+            miniMap.RevealIntercom(minimapIcon);
         }
     }
 }

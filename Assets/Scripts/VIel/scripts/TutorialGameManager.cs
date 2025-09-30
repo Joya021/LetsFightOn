@@ -172,7 +172,7 @@ public class TutorialGameManager : MonoBehaviour
         pencilLessonCanvas.gameObject.SetActive(false);
     }
 
-    // ✅ FIXED Code Validation Method
+    //FIXED Code Validation Method
     void CheckCode()
     {
         string userInput = codeInputField.text;
@@ -288,7 +288,7 @@ public class TutorialGameManager : MonoBehaviour
     }
 }
 
-// ✅ PencilTrigger Script (unchanged)
+
 [System.Serializable]
 public class PencilTrigger : MonoBehaviour
 {

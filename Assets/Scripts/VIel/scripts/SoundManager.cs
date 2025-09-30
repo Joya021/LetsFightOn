@@ -4,12 +4,12 @@ using UnityEngine.UI;
 public class SoundManager : MonoBehaviour
 {
     [Header("UI Sliders")]
-    public Slider sfxSlider;   // Slider for SFX volume
-    public Slider musicSlider; // Slider for music volume
+    public Slider sfxSlider;   
+    public Slider musicSlider; 
 
     [Header("Audio Sources")]
-    public AudioSource sfxSource;  // SFX AudioSource (for sound effects)
-    public AudioSource musicSource; // Music AudioSource (for background music)
+    public AudioSource sfxSource;  
+    public AudioSource musicSource; 
 
     // SFX and Music volume variables
     public float sfxVolume = 1f;

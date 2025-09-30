@@ -12,7 +12,7 @@ public class MinimapController : MonoBehaviour
     public float followSpeed = 5f;
 
     [Header("Layers")]
-    public string intercomLayerName = "SHIBAL";
+    public string intercomLayerName = "INTERCOM";
     private int intercomLayer;
 
     [Header("Hunter Mode")]

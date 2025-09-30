@@ -13,12 +13,12 @@ public class InternetChecker : MonoBehaviour
     {
         if (Application.internetReachability == NetworkReachability.NotReachable)
         {
-            Debug.LogWarning("❌ No internet connection.");
+            Debug.LogWarning("No internet connection.");
             ShowNoInternetPanel(true);
         }
         else
         {
-            Debug.Log("✅ Internet connection detected.");
+            Debug.Log("Internet connection detected.");
             ShowNoInternetPanel(false);
         }
     }

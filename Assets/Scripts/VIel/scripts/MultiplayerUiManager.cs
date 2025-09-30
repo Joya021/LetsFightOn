@@ -3,20 +3,6 @@ using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Collections;
 
-[System.Serializable]
-public class PlayerUIData
-{
-    public string playerName;
-    public int playerId;
-    public bool isSurvivor; // true = survivor, false = hunter
-    public bool isAlive = true;
-    public GameObject playerIconObject; // The UI GameObject containing all player UI elements
-    public Image playerIcon; // The character icon
-    public Image statusIndicator; // Alive/Dead indicator
-    public Text playerNameText; // Player name display
-    public GameObject quickChatIndicator; // Shows when player uses quick chat
-    public Image quickChatImage; // The actual quick chat image
-}
 
 public class MultiplayerUIManager : MonoBehaviour
 {
@@ -46,6 +32,20 @@ public class MultiplayerUIManager : MonoBehaviour
 
     public static MultiplayerUIManager Instance;
 
+    [System.Serializable]
+    public class PlayerUIData
+    {
+        public string playerName;
+        public int playerId;
+        public bool isSurvivor; // true = survivor, false = hunter
+        public bool isAlive = true;
+        public GameObject playerIconObject; // The UI GameObject containing all player UI elements
+        public Image playerIcon; // The character icon
+        public Image statusIndicator; // Alive/Dead indicator
+        public Text playerNameText; // Player name display
+        public GameObject quickChatIndicator; // Shows when player uses quick chat
+        public Image quickChatImage; // The actual quick chat image
+    }
     void Awake()
     {
         if (Instance == null)

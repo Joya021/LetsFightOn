@@ -110,20 +110,10 @@ public class CharacterSelectionManager : MonoBehaviour
         // For now, always load the default survivor scene as requested
         // In the future, you can use currentCharacters[selectedCharacterIndex].sceneName
         Debug.Log($"Locked in character {selectedCharacterIndex}. Loading scene...");
-
-        // Load the appropriate scene
-        if (isHunterMode)
-        {
-            // For future hunter implementation
-            SceneManager.LoadScene(defaultHunterScene);
-        }
-        else
-        {
-            // Always load survivor scene for now
-            SceneManager.LoadScene(defaultSurvivorScene);
-        }
     }
 
+        // Load the appropriate scene
+       
     // Method to set role mode (can be called from other scripts)
     public void SetHunterMode(bool hunterMode)
     {

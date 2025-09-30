@@ -26,8 +26,8 @@ public class CodeCheckGame : MonoBehaviour
     public Button checkButton;
 
     [Header("Answer Feedback Images")]
-    public GameObject[] correctAnswerImages; // Array of images to show randomly when correct
-    public GameObject wrongAnswerImage; // Image to show when wrong
+    public GameObject[] correctAnswerImages;
+    public GameObject wrongAnswerImage; 
     public float answerImageDisplayTime = 2f;
 
     [Header("Cooldown UI")]

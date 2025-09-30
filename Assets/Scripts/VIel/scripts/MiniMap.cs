@@ -14,7 +14,7 @@ public class MiniMap : MonoBehaviour
     [Header("Hunter Mode")]
     public bool isHunterMode = false; // Set this to true in the hunter scene
 
-    // ⭐ Keep track of revealed intercoms (for survivor mode)
+    
     private HashSet<GameObject> revealedIntercoms = new HashSet<GameObject>();
 
     void Start()
@@ -24,10 +24,15 @@ public class MiniMap : MonoBehaviour
             minimapCamera = GetComponent<Camera>();
         }
 
-        // 🎯 In hunter mode, reveal all intercoms immediately
+        
         if (isHunterMode)
         {
             RevealAllIntercomsForHunter();
+        }
+        else
+        {
+          
+            HideAllIntercomsForSurvivor();
         }
     }
 
@@ -42,9 +47,7 @@ public class MiniMap : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Called by InterCom when the survivor first interacts with it
-    /// </summary>
+  
     public void RevealIntercom(GameObject intercomIcon)
     {
         if (intercomIcon == null) return;
@@ -58,9 +61,6 @@ public class MiniMap : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// In hunter mode, reveal all intercom icons immediately
-    /// </summary>
     private void RevealAllIntercomsForHunter()
     {
         // Find all InterCom objects in the scene
@@ -76,9 +76,23 @@ public class MiniMap : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Hide a specific intercom (if needed)
-    /// </summary>
+   
+    private void HideAllIntercomsForSurvivor()
+    {
+        // Find all InterCom objects in the scene
+        InterCom[] allIntercoms = FindObjectsOfType<InterCom>();
+
+        foreach (InterCom intercom in allIntercoms)
+        {
+            if (intercom.minimapIcon != null)
+            {
+                intercom.minimapIcon.SetActive(false);
+                Debug.Log($"[MiniMap] Survivor mode: Hid {intercom.minimapIcon.name}");
+            }
+        }
+    }
+
+  
     public void HideIntercom(GameObject intercomIcon)
     {
         if (intercomIcon == null) return;
@@ -91,9 +105,7 @@ public class MiniMap : MonoBehaviour
         intercomIcon.SetActive(false);
     }
 
-    /// <summary>
-    /// Reset all revealed intercoms (useful for restarting)
-    /// </summary>
+ 
     public void ResetRevealedIntercoms()
     {
         foreach (GameObject icon in revealedIntercoms)

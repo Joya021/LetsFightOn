@@ -6,13 +6,13 @@ public class PlayerMovement : MonoBehaviour
 {
     public float dropThroughTime = 0.5f;
     public float speed = 5f;
-    public float jumpThroughDuration = 0.3f; // How long to disable collisions
-    public LayerMask enemyLayers = 1 << 6; // Layers that can be jumped through (enemies, obstacles)
+    public float jumpThroughDuration = 0.3f; 
+    public LayerMask enemyLayers = 1 << 6; 
     public Rigidbody2D rb;
     public bool canMove = true;
 
     [Header("Audio Settings")]
-    public bool isSurvivor = true; // Set this based on player type
+    public bool isSurvivor = true; 
 
     [Header("UI - Stun Ability Cooldown")]
     public GameObject stunCooldownCanvas;
@@ -29,14 +29,14 @@ public class PlayerMovement : MonoBehaviour
     private PlatformEffector2D currentEffector;
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
-    private Animator animk; // Using animk as the Animator reference now
+    private Animator animk; 
     private Collider2D playerCollider;
     Vector2 movement;
     private bool moving;
-    private bool wasMovingLastFrame = false; // Track movement state changes
-    private Vector2 lastDirection;  // Keep track of the last direction
-    private bool isAttacking = false; // Track whether the player is attacking
-    private bool attackInputReceived = false;  // To ensure the input is only processed once per attack
+    private bool wasMovingLastFrame = false; 
+    private Vector2 lastDirection;  
+    private bool isAttacking = false;
+    private bool attackInputReceived = false; 
 
     void Start()
     {

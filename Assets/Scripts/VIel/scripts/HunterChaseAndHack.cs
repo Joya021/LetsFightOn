@@ -171,7 +171,7 @@ public class HunterChaseAndHack : MonoBehaviour
         if (GameObject.FindObjectOfType<GameManager>() is GameManager gm)
             gm.UnregisterCorrectObject(currentTarget);
 
-        ShowNotification("⚠️ Hunter tampered with your code!");
+        ShowNotification(" Hunter tampered with your code!");
         StartCoroutine(FlashInputField());
     }
 

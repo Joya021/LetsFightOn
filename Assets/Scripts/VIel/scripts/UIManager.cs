@@ -21,7 +21,7 @@ public class UIManager : MonoBehaviour
         newPanel.SetActive(true);
         currentPanel = newPanel;
 
-        // Optional: Hide image when showing new panel
+        // Hide image when showing new panel
         HideCurrentImage();
 
         Debug.Log("ShowPanel: " + newPanel.name);
@@ -82,7 +82,7 @@ public class UIManager : MonoBehaviour
         newImage.SetActive(true);
         currentImage = newImage;
 
-        // ⚠️ Do NOT close the panel underneath
+       
         Debug.Log("ShowImage: " + newImage.name);
     }
 

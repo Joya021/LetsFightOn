@@ -64,7 +64,7 @@ public class AutoStartTimer : MonoBehaviour
             // Force start the game
             gameManager.timerStarted = true;
 
-            // Unlock player movement when game starts
+          
             if (playerMovement != null)
             {
                 playerMovement.UnlockMovement();
