@@ -72,7 +72,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 4
+  m_SortingOrder: 5
   m_Sprite: {fileID: 21300000, guid: 30b1faa2bc3ff5043adae0a30c0e2756, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -96,6 +96,7 @@ GameObject:
   - component: {fileID: 3902025704208215542}
   - component: {fileID: 3324262755533452090}
   - component: {fileID: 845144687082847105}
+  - component: {fileID: 1760092919066825122}
   m_Layer: 0
   m_Name: LearnableObjectRibbon
   m_TagString: LearnableObject
@@ -159,7 +160,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 5
+  m_SortingOrder: 6
   m_Sprite: {fileID: 21300000, guid: 5ad1d0d43b2b5bb4680fe440571337d6, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -225,6 +226,30 @@ MonoBehaviour:
   m_GameObject: {fileID: 8346515794202100223}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0072e959bf584864b940a5f60e5bd71f, type: 3}
+  m_Script: {fileID: 11500000, guid: 7001eb589df42ab4ca62622b1e4042fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  lessonText: 
+  pythonChallenge: 
+  itemID: 
+--- !u!95 &1760092919066825122
+Animator:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8346515794202100223}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 8498d1bf0037945428030c7f2cb81eaf, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0

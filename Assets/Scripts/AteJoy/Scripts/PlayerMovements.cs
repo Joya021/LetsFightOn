@@ -17,6 +17,8 @@ public class PlayerMovements : MonoBehaviour
     private Vector2 input;
     private bool moving;
 
+    public bool canMove = true;
+
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -25,13 +27,28 @@ public class PlayerMovements : MonoBehaviour
     // Update is called once per frame
     private void Update()
     {
+        if (!canMove)
+        {
+            input = Vector2.zero;
+            Animate(); // Still update animation to reflect idle
+            return;
+        }
+
         GetInput();
         Animate();
     }
 
     private void FixedUpdate()
     {
-        rb.velocity = input * moveSpeed;
+        if (canMove)
+        {
+            rb.velocity = input * moveSpeed;
+        }
+        else
+        {
+            rb.velocity = Vector2.zero;
+        }
+
     }
 
     private void GetInput()
@@ -45,14 +62,7 @@ public class PlayerMovements : MonoBehaviour
 
     private void Animate()
     {
-        if (input.magnitude > 0.1f || input.magnitude < -0.1f) 
-        {
-            moving = true;
-        }
-        else
-        {
-            moving = false;
-        }
+        moving = input.magnitude > 0.1f;
 
         if (moving)
         {
