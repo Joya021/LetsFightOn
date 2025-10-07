@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 6756195716404378011}
   - component: {fileID: 8977024542531021256}
   - component: {fileID: 2174812222922968782}
+  - component: {fileID: 5656262044448491374}
   m_Layer: 0
   m_Name: LearnableObjectPen
   m_TagString: LearnableObject
@@ -75,8 +76,8 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 5
-  m_Sprite: {fileID: 21300000, guid: 13724baeb14f5734f834def1b8369d0d, type: 3}
+  m_SortingOrder: 6
+  m_Sprite: {fileID: 21300000, guid: fb1c60c98f3615a4c8453fb39d2e8226, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -123,7 +124,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 3, y: 8.8}
+    oldSize: {x: 7.65, y: 6.78}
     newSize: {x: 3, y: 8.8}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -141,9 +142,47 @@ MonoBehaviour:
   m_GameObject: {fileID: 3484466776196733118}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0072e959bf584864b940a5f60e5bd71f, type: 3}
+  m_Script: {fileID: 11500000, guid: 7001eb589df42ab4ca62622b1e4042fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isCompleted: 0
+  learnableObjectSprite: {fileID: 21300000, guid: fb1c60c98f3615a4c8453fb39d2e8226, type: 3}
+  learnableObjectSprite1: {fileID: 21300000, guid: fb1c60c98f3615a4c8453fb39d2e8226, type: 3}
+  learnableObjectSprite2: {fileID: 21300000, guid: fb1c60c98f3615a4c8453fb39d2e8226, type: 3}
+  closeButtonSprite1: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
+  closeButtonSprite2: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
+  closeButtonSprite3: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
+  lessonSprite: {fileID: 21300000, guid: 2e947d0e58b9e4a408555e817a3eb6b5, type: 3}
+  sampleCodeSprite: {fileID: 21300000, guid: f0370fa529bf9d948860539a51ac6e09, type: 3}
+  brokenCodeSprite: {fileID: 21300000, guid: 8ee10e6a7c2646c40a59316a2f5ee6c3, type: 3}
+  successMessageSprite: {fileID: 21300000, guid: c393519b94d3fe1459911df472542cba, type: 3}
+  expectedFix: 'def print_message:
+
+    Class MidtermExamination:
+
+    PI = 3.14159'
+  itemID: 2
+--- !u!95 &5656262044448491374
+Animator:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3484466776196733118}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 8c83f7179f798bd42809993d05e7b844, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!1 &7650615488556469988
 GameObject:
   m_ObjectHideFlags: 0
@@ -216,7 +255,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 4
+  m_SortingOrder: 5
   m_Sprite: {fileID: 21300000, guid: 30b1faa2bc3ff5043adae0a30c0e2756, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0

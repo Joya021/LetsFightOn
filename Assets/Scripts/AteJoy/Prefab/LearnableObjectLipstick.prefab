@@ -72,7 +72,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 4
+  m_SortingOrder: 5
   m_Sprite: {fileID: 21300000, guid: 30b1faa2bc3ff5043adae0a30c0e2756, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -96,6 +96,7 @@ GameObject:
   - component: {fileID: 3371360717415964392}
   - component: {fileID: 7555962708885556435}
   - component: {fileID: 774935054910177149}
+  - component: {fileID: 31484830531179896}
   m_Layer: 0
   m_Name: LearnableObjectLipstick
   m_TagString: LearnableObject
@@ -159,7 +160,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 5
+  m_SortingOrder: 6
   m_Sprite: {fileID: 21300000, guid: fdf1da85774b4ef47aa59e0e82a6bb31, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -225,6 +226,40 @@ MonoBehaviour:
   m_GameObject: {fileID: 8713307046236259785}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0072e959bf584864b940a5f60e5bd71f, type: 3}
+  m_Script: {fileID: 11500000, guid: 7001eb589df42ab4ca62622b1e4042fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isCompleted: 0
+  learnableObjectSprite: {fileID: 21300000, guid: fdf1da85774b4ef47aa59e0e82a6bb31, type: 3}
+  learnableObjectSprite1: {fileID: 21300000, guid: fdf1da85774b4ef47aa59e0e82a6bb31, type: 3}
+  learnableObjectSprite2: {fileID: 21300000, guid: fdf1da85774b4ef47aa59e0e82a6bb31, type: 3}
+  closeButtonSprite1: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
+  closeButtonSprite2: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
+  closeButtonSprite3: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
+  lessonSprite: {fileID: 21300000, guid: 18917bb4aad6b674fa5b7ef96dbb03cf, type: 3}
+  sampleCodeSprite: {fileID: 21300000, guid: 081d817954d71374680a1eda30d2f76e, type: 3}
+  brokenCodeSprite: {fileID: 21300000, guid: 15fcecfbe3aca054e9db41abb583aedf, type: 3}
+  successMessageSprite: {fileID: 21300000, guid: 425fb877e5e2d764aa7df1488aea0554, type: 3}
+  expectedFix: '''elseif'''
+  itemID: 3
+--- !u!95 &31484830531179896
+Animator:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8713307046236259785}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 11533bed4c581684483b464790affa76, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
