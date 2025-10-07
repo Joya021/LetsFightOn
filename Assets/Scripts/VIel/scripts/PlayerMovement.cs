@@ -1,18 +1,24 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
+using Photon.Pun;
 
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement : MonoBehaviour, IPunObservable
 {
+    PhotonView view;
     public float dropThroughTime = 0.5f;
     public float speed = 5f;
-    public float jumpThroughDuration = 0.3f; 
-    public LayerMask enemyLayers = 1 << 6; 
+    public float jumpThroughDuration = 0.3f;
+    public LayerMask enemyLayers = 1 << 6;
     public Rigidbody2D rb;
     public bool canMove = true;
 
+    [Header("Network Smoothing")]
+    public float positionLerpSpeed = 10f;
+    public float rotationLerpSpeed = 10f;
+
     [Header("Audio Settings")]
-    public bool isSurvivor = true; 
+    public bool isSurvivor = true;
 
     [Header("UI - Stun Ability Cooldown")]
     public GameObject stunCooldownCanvas;
@@ -25,24 +31,33 @@ public class PlayerMovement : MonoBehaviour
     [HideInInspector] public bool isStunned = false;
     [HideInInspector] public bool isJumpingThrough = false;
 
-    private float stunCooldownTimer = 0f;
+    private double stunEndTime = 0f;
     private PlatformEffector2D currentEffector;
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
-    private Animator animk; 
+    private Animator animk;
     private Collider2D playerCollider;
     Vector2 movement;
     private bool moving;
-    private bool wasMovingLastFrame = false; 
-    private Vector2 lastDirection;  
+    private bool wasMovingLastFrame = false;
+    private Vector2 lastDirection;
     private bool isAttacking = false;
-    private bool attackInputReceived = false; 
+    private bool attackInputReceived = false;
+
+    // Network sync variables
+    private Vector2 networkPosition;
+    private Vector2 networkMovement;
+    private Vector2 networkLastDirection;
+    private bool networkMoving;
+    private bool networkAttacking;
+    private bool firstNetworkUpdate = true;
 
     void Start()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
-        animk = GetComponent<Animator>(); // Get the reference to animk
+        animk = GetComponent<Animator>();
         playerCollider = GetComponent<Collider2D>();
+        view = GetComponent<PhotonView>();
 
         if (spriteRenderer != null)
             originalColor = spriteRenderer.color;
@@ -52,10 +67,39 @@ public class PlayerMovement : MonoBehaviour
 
         if (moveAgainCanvas != null)
             moveAgainCanvas.SetActive(false);
+
+        networkPosition = rb.position;
+
+        // FIXED: Notify camera to follow this survivor if it's mine
+        if (view != null && view.IsMine)
+        {
+            CameraFlow cam = Camera.main?.GetComponent<CameraFlow>();
+            if (cam != null)
+            {
+                cam.SetFollowTarget(transform);
+                Debug.Log($"Camera now following survivor: {gameObject.name}");
+            }
+        }
+        else if (view == null || PhotonNetwork.OfflineMode)
+        {
+            // Offline mode
+            CameraFlow cam = Camera.main?.GetComponent<CameraFlow>();
+            if (cam != null)
+            {
+                cam.SetFollowTarget(transform);
+                Debug.Log($"Camera now following offline survivor: {gameObject.name}");
+            }
+        }
     }
 
     void Update()
     {
+        if (view != null && !view.IsMine)
+        {
+            SmoothNetworkPosition();
+            return;
+        }
+
         // Jump through colliders with Spacebar
         if (Input.GetKeyDown(KeyCode.Space) && canMove && !isStunned && !isJumpingThrough)
         {
@@ -72,15 +116,18 @@ public class PlayerMovement : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.J) && currentEffector != null)
             StartCoroutine(DropThroughPlatform(currentEffector));
 
-        // Stun system
+        // Stun system using PhotonNetwork.Time
         if (isStunned)
         {
-            stunCooldownTimer -= Time.deltaTime;
+            double timeRemaining = stunEndTime - PhotonNetwork.Time;
+
             if (moveAgainCanvas != null)
                 moveAgainCanvas.SetActive(true);
+
             if (moveAgainText != null)
-                moveAgainText.text = $"{stunCooldownTimer:F1}";
-            if (stunCooldownTimer <= 0f)
+                moveAgainText.text = $"{timeRemaining:F1}";
+
+            if (timeRemaining <= 0f)
             {
                 isStunned = false;
                 UnlockMovement();
@@ -101,13 +148,18 @@ public class PlayerMovement : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (view != null && !view.IsMine)
+        {
+            ApplyNetworkAnimation();
+            return;
+        }
+
         if (!canMove)
         {
             rb.velocity = Vector2.zero;
             animk.SetFloat("X", movement.x);
             animk.SetFloat("Y", movement.y);
 
-            // Stop walking sound if player can't move
             if (wasMovingLastFrame && AudioManager.Instance != null)
             {
                 AudioManager.Instance.StopWalking();
@@ -120,27 +172,44 @@ public class PlayerMovement : MonoBehaviour
         movement.x = Input.GetAxisRaw("Horizontal");
         movement.y = Input.GetAxisRaw("Vertical");
 
-        // Save the last movement direction
         if (movement.magnitude > 0.1f)
         {
             lastDirection = movement.normalized;
         }
 
-        // Apply movement
         rb.MovePosition(rb.position + movement.normalized * speed * Time.deltaTime);
 
-        // Animate based on movement
         Animate();
-
-        // Handle walking audio
         HandleWalkingAudio();
+    }
+
+    private void SmoothNetworkPosition()
+    {
+        rb.position = Vector2.Lerp(rb.position, networkPosition, Time.deltaTime * positionLerpSpeed);
+    }
+
+    private void ApplyNetworkAnimation()
+    {
+        if (networkMoving)
+        {
+            animk.SetBool("Moving", true);
+            animk.SetFloat("X", networkMovement.x);
+            animk.SetFloat("Y", networkMovement.y);
+        }
+        else
+        {
+            animk.SetBool("Moving", false);
+            animk.SetFloat("X", networkLastDirection.x);
+            animk.SetFloat("Y", networkLastDirection.y);
+        }
+
+        animk.SetBool("Attacking", networkAttacking);
     }
 
     private void HandleWalkingAudio()
     {
         bool currentlyMoving = movement.magnitude > 0.1f;
 
-        // If we started moving this frame
         if (currentlyMoving && !wasMovingLastFrame && AudioManager.Instance != null)
         {
             if (isSurvivor)
@@ -148,7 +217,6 @@ public class PlayerMovement : MonoBehaviour
             else
                 AudioManager.Instance.StartHunterWalking();
         }
-        // If we stopped moving this frame
         else if (!currentlyMoving && wasMovingLastFrame && AudioManager.Instance != null)
         {
             AudioManager.Instance.StopWalking();
@@ -168,78 +236,60 @@ public class PlayerMovement : MonoBehaviour
             moving = false;
         }
 
-        // If moving, set the Moving bool and X/Y direction
         if (moving)
         {
             animk.SetBool("Moving", true);
-            animk.SetFloat("X", movement.x);  // Horizontal movement direction
-            animk.SetFloat("Y", movement.y);  // Vertical movement direction
+            animk.SetFloat("X", movement.x);
+            animk.SetFloat("Y", movement.y);
         }
         else
         {
             animk.SetBool("Moving", false);
-
-            // If not moving, use the last direction
             animk.SetFloat("X", lastDirection.x);
             animk.SetFloat("Y", lastDirection.y);
         }
 
-        // Handle Attacking animation
-        if (isAttacking)
-        {
-            animk.SetBool("Attacking", true);  // Trigger the attack animation
-        }
-        else
-        {
-            animk.SetBool("Attacking", false); // Reset the attack animation
-        }
+        animk.SetBool("Attacking", isAttacking);
     }
 
     private void TriggerAttack()
     {
         isAttacking = true;
-        attackInputReceived = true;  // Mark that the attack input was received
+        attackInputReceived = true;
 
-        // Reset after animation finishes
         StartCoroutine(ResetAttackAnimationAfterDelay(0.5f));
     }
 
     private IEnumerator ResetAttackAnimationAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
-        isAttacking = false;  // Reset attack state
-        attackInputReceived = false;  // Allow the attack to be triggered again
+        isAttacking = false;
+        attackInputReceived = false;
     }
 
     IEnumerator JumpThroughColliders()
     {
         isJumpingThrough = true;
 
-        // Get all colliders that are on enemy layers
         Collider2D[] enemyColliders = Physics2D.OverlapCircleAll(transform.position, 10f, enemyLayers);
 
-        // Disable collisions with enemy/obstacle colliders only
         foreach (Collider2D enemyCollider in enemyColliders)
         {
             if (playerCollider != null && enemyCollider != null)
                 Physics2D.IgnoreCollision(playerCollider, enemyCollider, true);
         }
 
-        // Optional: Change color to indicate jump-through state
         if (spriteRenderer != null)
             spriteRenderer.color = Color.yellow;
 
-        // Wait for the duration
         yield return new WaitForSeconds(jumpThroughDuration);
 
-        // Re-enable collisions with enemy colliders
         foreach (Collider2D enemyCollider in enemyColliders)
         {
             if (playerCollider != null && enemyCollider != null)
                 Physics2D.IgnoreCollision(playerCollider, enemyCollider, false);
         }
 
-        // Restore original color
         if (spriteRenderer != null)
             spriteRenderer.color = originalColor;
 
@@ -256,14 +306,18 @@ public class PlayerMovement : MonoBehaviour
     public void LockMovement(float stunTime = 0f)
     {
         canMove = false;
-        isStunned = stunTime > 0f;
-        stunCooldownTimer = stunTime;
 
-        if (spriteRenderer != null && stunTime > 0)
-            spriteRenderer.color = Color.blue;
+        if (stunTime > 0f)
+        {
+            isStunned = true;
+            stunEndTime = PhotonNetwork.Time + stunTime;
 
-        if (moveAgainCanvas != null)
-            moveAgainCanvas.SetActive(true);
+            if (spriteRenderer != null)
+                spriteRenderer.color = Color.blue;
+
+            if (moveAgainCanvas != null)
+                moveAgainCanvas.SetActive(true);
+        }
     }
 
     public void UnlockMovement()
@@ -279,5 +333,25 @@ public class PlayerMovement : MonoBehaviour
 
         if (moveAgainCanvas != null)
             moveAgainCanvas.SetActive(false);
+    }
+
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            stream.SendNext(rb.position);
+            stream.SendNext(movement);
+            stream.SendNext(lastDirection);
+            stream.SendNext(moving);
+            stream.SendNext(isAttacking);
+        }
+        else
+        {
+            networkPosition = (Vector2)stream.ReceiveNext();
+            networkMovement = (Vector2)stream.ReceiveNext();
+            networkLastDirection = (Vector2)stream.ReceiveNext();
+            networkMoving = (bool)stream.ReceiveNext();
+            networkAttacking = (bool)stream.ReceiveNext();
+        }
     }
 }

@@ -1,24 +1,27 @@
 using UnityEngine;
 
-// Attach this script to your Pencil GameObject
-public class PencilTriggerd : MonoBehaviour
+public class BackgroundMusic : MonoBehaviour
 {
-    [Header("References")]
-    public TutorialGameManager gameManager;
+    public static BackgroundMusic Instance;
 
-    void OnTriggerEnter2D(Collider2D other)
+    private AudioSource audioSource;
+
+    void Awake()
     {
-        if (other.CompareTag("Player"))
+        if (Instance != null && Instance != this)
         {
-            gameManager.OnTriggerEnter2D(other);
+            Destroy(gameObject); // Ensure only one instance exists
+            return;
         }
-    }
 
-    void OnTriggerExit2D(Collider2D other)
-    {
-        if (other.CompareTag("Player"))
+        Instance = this;
+        DontDestroyOnLoad(gameObject); // Keep it across scenes
+
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource != null && !audioSource.isPlaying)
         {
-            gameManager.OnTriggerExit2D(other);
+            audioSource.loop = true;
+            audioSource.Play();
         }
     }
 }

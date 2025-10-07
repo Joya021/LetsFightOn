@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Photon.Pun;
+using Photon.Realtime;
 
-public class GameManager : MonoBehaviour
+public class GameManager : MonoBehaviourPunCallbacks
 {
     [System.Serializable]
     public class CodeTask
@@ -14,9 +16,11 @@ public class GameManager : MonoBehaviour
         public string startingInput;
     }
     private bool nearWinStunTriggered = false;
+
     [Header("Multiplayer Settings")]
-    public bool isMultiplayerMode = false; // Set to true for online mode
-    public int localPlayerId = 0; // This player's ID
+    public Text pingText;
+    public bool isMultiplayerMode = false;
+    public int localPlayerId = 0;
     public bool localPlayerIsSurvivor = true;
 
     [Header("Game Start Canvas")]
@@ -24,7 +28,7 @@ public class GameManager : MonoBehaviour
     public float gameStartDisplayTime = 3f;
 
     [Header("Auto Start Settings")]
-    public bool useAutoStart = false; // Enable for online mode
+    public bool useAutoStart = false;
     public float autoStartDelay = 5f;
     private float autoStartTimer;
     private bool autoStartTriggered = false;
@@ -34,11 +38,17 @@ public class GameManager : MonoBehaviour
     private float remainingTime;
     public Text timerText;
 
+    // Photon sync variables
+    private double gameStartTimestamp = 0;
+    private const string GAME_START_TIME_KEY = "GameStartTime";
+    private const string TIMER_STARTED_KEY = "TimerStarted";
+
     [Header("Endgame UI")]
     public GameObject endPanel;
     public Text endText;
     public Button playAgainButton;
     public Button exitButton;
+    public Button lobbyButton;
 
     [Header("Records Display")]
     public GameObject recordsPanel;
@@ -101,9 +111,8 @@ public class GameManager : MonoBehaviour
     public GameObject[] heartIcons;
     public GameObject gameOverPanel;
 
-    // Player Records
     [Header("Player Records")]
-    public bool isHunterMode = false; // Set this based on player role
+    public bool isHunterMode = false;
     private float gameStartTime;
     private int codesDebuggedCount = 0;
     private int codesInterruptedCount = 0;
@@ -114,6 +123,11 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
+        if (allCodeGames == null || allCodeGames.Count == 0)
+        {
+            allCodeGames = new List<CodeCheckGame>(FindObjectsOfType<CodeCheckGame>());
+        }
+        StartCoroutine(VerifyCodeCheckGamesLoaded());
         remainingTime = gameDuration;
         endPanel.SetActive(false);
         pauseMenuPanel.SetActive(false);
@@ -121,10 +135,8 @@ public class GameManager : MonoBehaviour
         gameStartTime = Time.time;
         autoStartTimer = autoStartDelay;
 
-        // Get UIManager
         uiManager = FindObjectOfType<UIManager>();
 
-        // Show game start canvas
         if (gameStartCanvas != null)
         {
             StartCoroutine(ShowGameStartCanvas());
@@ -139,7 +151,6 @@ public class GameManager : MonoBehaviour
         if (resumeButton != null)
             resumeButton.onClick.AddListener(ResumeGame);
 
-        // Help and Settings buttons
         if (helpButton != null)
             helpButton.onClick.AddListener(() => {
                 if (uiManager != null && helpPanel != null)
@@ -164,14 +175,12 @@ public class GameManager : MonoBehaviour
                     uiManager.GoBack();
             });
 
-        // Quick Chat setup
         if (quickChatButton != null)
             quickChatButton.onClick.AddListener(ToggleQuickChat);
 
         if (quickChatPanel != null)
             quickChatPanel.SetActive(false);
 
-        // Setup quick chat message buttons
         for (int i = 0; i < quickChatMessageButtons.Length && i < quickChatImages.Length; i++)
         {
             int index = i;
@@ -197,9 +206,10 @@ public class GameManager : MonoBehaviour
                 CameraFlow camFollow = Camera.main != null ? Camera.main.GetComponent<CameraFlow>() : null;
                 if (camFollow != null && player != null)
                 {
-                    camFollow.player = player;
+                    camFollow.SetFollowTarget(player);
                     camFollow.SetBoundsFromMultipleRenderers(allRenderers);
                 }
+
             }
         }
 
@@ -210,6 +220,120 @@ public class GameManager : MonoBehaviour
 
         UpdateProgressText();
         UpdateHeartDisplay();
+        if (lobbyButton != null)
+            lobbyButton.onClick.AddListener(ReturnToLobby);
+
+        // Initialize multiplayer timer sync
+        if (isMultiplayerMode && PhotonNetwork.IsConnected)
+        {
+            if (!PhotonNetwork.IsMasterClient)
+            {
+                // Non-master clients don't control timer directly
+                useAutoStart = false;
+            }
+        } }
+
+    public void ReturnToLobby()
+    {
+        if (PhotonNetwork.IsConnected && PhotonNetwork.InRoom)
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                // Master loads Lobby scene for everyone
+                PhotonNetwork.LoadLevel("Lobby");
+            }
+            else
+            {
+                // Non-master just wait — Photon will sync them
+                Debug.Log("Waiting for MasterClient to load Lobby...");
+            }
+        }
+        else
+        {
+            // Fallback if offline
+            SceneManager.LoadScene("Lobby");
+        }
+    }
+
+    private void InitializeMultiplayerTimer()
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            // Master client hasn't started the timer yet
+            if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(TIMER_STARTED_KEY))
+            {
+                ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable();
+                props[TIMER_STARTED_KEY] = false;
+                PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+            }
+        }
+        else
+        {
+            // Late joiner - sync with existing game time
+            if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(GAME_START_TIME_KEY))
+            {
+                gameStartTimestamp = (double)PhotonNetwork.CurrentRoom.CustomProperties[GAME_START_TIME_KEY];
+                timerStarted = (bool)PhotonNetwork.CurrentRoom.CustomProperties[TIMER_STARTED_KEY];
+
+                if (timerStarted)
+                {
+                    // Calculate how much time has passed
+                    double elapsedTime = PhotonNetwork.Time - gameStartTimestamp;
+                    remainingTime = gameDuration - (float)elapsedTime;
+
+                    if (remainingTime < 0)
+                        remainingTime = 0;
+                }
+            }
+        }
+    }
+    IEnumerator VerifyCodeCheckGamesLoaded()
+    {
+        yield return new WaitForSeconds(1f);
+
+        if (allCodeGames.Count == 0)
+        {
+            Debug.LogWarning("GameManager: No CodeCheckGames registered after 1 second. Searching manually...");
+            CodeCheckGame[] foundGames = FindObjectsOfType<CodeCheckGame>();
+            foreach (var game in foundGames)
+            {
+                if (!allCodeGames.Contains(game))
+                {
+                    allCodeGames.Add(game);
+                }
+            }
+            Debug.Log($"GameManager: Found {allCodeGames.Count} CodeCheckGames manually");
+        }
+
+        UpdateProgressText();
+    }
+    public override void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
+    {
+        if (propertiesThatChanged.ContainsKey(TIMER_STARTED_KEY))
+        {
+            timerStarted = (bool)propertiesThatChanged[TIMER_STARTED_KEY];
+        }
+
+        if (propertiesThatChanged.ContainsKey(GAME_START_TIME_KEY))
+        {
+            gameStartTimestamp = (double)propertiesThatChanged[GAME_START_TIME_KEY];
+        }
+    }
+
+    private void StartGameTimer()
+    {
+        if (isMultiplayerMode && PhotonNetwork.IsConnected && PhotonNetwork.IsMasterClient)
+        {
+            // Master client sets the game start time
+            gameStartTimestamp = PhotonNetwork.Time;
+
+            ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable();
+            props[GAME_START_TIME_KEY] = gameStartTimestamp;
+            props[TIMER_STARTED_KEY] = true;
+            PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+        }
+
+        timerStarted = true;
     }
 
     private IEnumerator ShowGameStartCanvas()
@@ -221,20 +345,22 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
+        if (pingText != null)
+            pingText.text = $"Ping: {PhotonNetwork.GetPing()}ms";
         if (gameEnded || isPaused) return;
 
-        // Auto start timer for online mode
+        // Auto start timer
         if (useAutoStart && !timerStarted && !autoStartTriggered)
         {
             autoStartTimer -= Time.deltaTime;
             if (autoStartTimer <= 0f)
             {
-                timerStarted = true;
+                StartGameTimer();
                 autoStartTriggered = true;
             }
         }
 
-        // Quick chat cooldown timer
+        // Quick chat cooldown
         if (quickChatTimer > 0)
         {
             quickChatTimer -= Time.deltaTime;
@@ -249,15 +375,29 @@ public class GameManager : MonoBehaviour
             }
         }
 
+        // Manual start (non-auto)
         if (!timerStarted && player != null && !useAutoStart)
         {
             if (Vector2.Distance(player.position, playerStartPos) > 0.01f)
-                timerStarted = true;
+            {
+                StartGameTimer();
+            }
         }
 
         if (timerStarted)
         {
-            remainingTime -= Time.deltaTime;
+            // Calculate remaining time based on server time for multiplayer
+            if (isMultiplayerMode && PhotonNetwork.IsConnected && gameStartTimestamp > 0)
+            {
+                double elapsedTime = PhotonNetwork.Time - gameStartTimestamp;
+                remainingTime = gameDuration - (float)elapsedTime;
+            }
+            else
+            {
+                // Single player fallback
+                remainingTime -= Time.deltaTime;
+            }
+
             UpdateTimerDisplay();
 
             if (!stunTriggered && (gameDuration - remainingTime) >= stunTriggerTime)
@@ -323,22 +463,20 @@ public class GameManager : MonoBehaviour
     {
         if (messageIndex < quickChatImages.Length && quickChatImages[messageIndex] != null)
         {
-            // Show locally
             StartCoroutine(ShowQuickChatImageCoroutine(messageIndex));
             quickChatTimer = quickChatCooldown;
 
-            // If multiplayer, also show on multiplayer UI
             if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
             {
                 MultiplayerUIManager.Instance.ShowPlayerQuickChat(localPlayerId, messageIndex);
             }
 
-            // Close quick chat panel
             isQuickChatPanelOpen = false;
             if (quickChatPanel != null)
                 quickChatPanel.SetActive(false);
         }
     }
+
     public void OnPlayerDeath(int playerId)
     {
         if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
@@ -346,6 +484,7 @@ public class GameManager : MonoBehaviour
             MultiplayerUIManager.Instance.SetPlayerAliveStatus(playerId, false);
         }
     }
+
     public void AddPlayerToUI(int playerId, string playerName, bool isSurvivor, int characterIndex)
     {
         if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
@@ -353,6 +492,7 @@ public class GameManager : MonoBehaviour
             MultiplayerUIManager.Instance.AddPlayer(playerId, playerName, isSurvivor, characterIndex);
         }
     }
+
     public void RemovePlayerFromUI(int playerId)
     {
         if (isMultiplayerMode && MultiplayerUIManager.Instance != null)
@@ -360,6 +500,7 @@ public class GameManager : MonoBehaviour
             MultiplayerUIManager.Instance.RemovePlayer(playerId);
         }
     }
+
     IEnumerator ShowQuickChatImageCoroutine(int imageIndex)
     {
         quickChatImages[imageIndex].SetActive(true);
@@ -479,7 +620,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void UpdateProgressText()
+    public void UpdateProgressText()
     {
         if (progressText != null)
             progressText.text = $"{correctObjects.Count}/{allCodeGames.Count}";
@@ -491,7 +632,6 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"Game Over called. Won = {won}");
 
-        // Show records
         ShowPlayerRecords(won);
 
         endPanel.SetActive(true);
@@ -522,16 +662,16 @@ public class GameManager : MonoBehaviour
             if (isHunterMode)
             {
                 recordsString = $"Hunter Mode: {(won ? "You Won!" : "You Lost!")}\n" +
-                               $"+{xpGained} XP\n" +
-                               $"Codes Interrupted: {codesInterruptedCount}";
+                    $"+{xpGained} XP\n" +
+                    $"Codes Interrupted: {codesInterruptedCount}";
             }
             else
             {
                 float avgTime = GetAverageDebuggingTime();
                 recordsString = $"Survivor Mode: {(won ? "You Won!" : "You Lost!")}\n" +
-                               $"+{xpGained} XP\n" +
-                               $"Debugging Time Average: {avgTime:F1} seconds\n" +
-                               $"Codes Debugged: {codesDebuggedCount}";
+                    $"+{xpGained} XP\n" +
+                    $"Debugging Time Average: {avgTime:F1} seconds\n" +
+                    $"Codes Debugged: {codesDebuggedCount}";
             }
 
             recordsText.text = recordsString;

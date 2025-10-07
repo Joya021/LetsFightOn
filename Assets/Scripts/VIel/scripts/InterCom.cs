@@ -1,84 +1,32 @@
-﻿using UnityEngine;
+﻿// InterCom.cs
+using UnityEngine;
 using System.Collections;
 using UnityEngine.UI;
+using Photon.Pun;
+using ExitGames.Client.Photon;
+using Photon.Realtime;
 
 public class InterCom : MonoBehaviour
 {
-    [Header("Spawn Settings")]
-    public Collider2D[] spawnAreas;
-    public float minDistanceBetweenObjects = 3f;
-    public LayerMask obstacleLayerMask = -1; // Layers to avoid when spawning
-    public float spawnCheckRadius = 0.5f; // Radius to check for obstacles
-
     [Header("Interaction Settings")]
     public KeyCode interactKey = KeyCode.F;
 
     [Header("References")]
     public CodeCheckGame codeCheckGame;
-    public GameManager gameManager; // Reference to check if game ended
+    public GameManager gameManager;
 
-    // The GameObject that represents the icon to show on the minimap
     [Header("Minimap Icon")]
-    [Tooltip("Assign the child GameObject that has a SpriteRenderer (your minimap dot).")]
     public GameObject minimapIcon;
 
     private bool isPlayerNearby = false;
-
-    // The minimap controller - corrected to use MiniMap class
     private MiniMap miniMap;
+
+    // Network sync - positions are set by MasterClient
+    public static readonly string INTERCOM_POSITIONS_KEY = "IntercomPositions";
 
     void Start()
     {
-        // Random spawn (your original logic)
-        if (spawnAreas != null && spawnAreas.Length > 0)
-        {
-            Vector2 pos;
-            int safety = 0;
-            do
-            {
-                Collider2D selectedSpawnArea = spawnAreas[Random.Range(0, spawnAreas.Length)];
-                pos = new Vector2(
-                    Random.Range(selectedSpawnArea.bounds.min.x, selectedSpawnArea.bounds.max.x),
-                    Random.Range(selectedSpawnArea.bounds.min.y, selectedSpawnArea.bounds.max.y)
-                );
-                safety++;
-            } while ((!IsFarFromOtherInteractables(pos) || IsPositionBlocked(pos)) && safety < 100);
-            transform.position = pos;
-        }
-        else
-        {
-            Debug.LogWarning("No spawn area(s) assigned!");
-        }
-
-        // Find the minimap controller in the scene - using correct class name
         miniMap = FindObjectOfType<MiniMap>();
-    }
-
-    private bool IsFarFromOtherInteractables(Vector2 pos)
-    {
-        foreach (var other in FindObjectsOfType<InterCom>())
-        {
-            if (other != this && Vector2.Distance(pos, other.transform.position) < minDistanceBetweenObjects)
-                return false;
-        }
-        return true;
-    }
-
-    private bool IsPositionBlocked(Vector2 pos)
-    {
-        // Check if there are any colliders at this position that we should avoid
-        Collider2D[] overlapping = Physics2D.OverlapCircleAll(pos, spawnCheckRadius, obstacleLayerMask);
-
-        // Filter out trigger colliders (we only care about solid obstacles)
-        foreach (Collider2D col in overlapping)
-        {
-            if (col != null && !col.isTrigger)
-            {
-                return true; // Position is blocked by a solid collider
-            }
-        }
-
-        return false; // Position is clear
     }
 
     void Update()
@@ -87,9 +35,8 @@ public class InterCom : MonoBehaviour
         {
             if (codeCheckGame != null && !codeCheckGame.isOnCooldown)
             {
-                if (gameManager != null && gameManager.gameEnded) return; // disable after game ends
+                if (gameManager != null && gameManager.gameEnded) return;
 
-                // Play intercom interact sound
                 if (AudioManager.Instance != null)
                     AudioManager.Instance.PlayIntercomInteract();
 
@@ -100,20 +47,64 @@ public class InterCom : MonoBehaviour
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        if (!other.CompareTag("Player")) return;
+
+        // Prefer Photon detection, but fall back for offline/local players
+        PhotonView pv = other.GetComponent<PhotonView>();
+        PlayerMovement pm = other.GetComponent<PlayerMovement>();
+
+        // If we're in offline mode, any local player collider should be able to interact
+        if (PhotonNetwork.OfflineMode)
+        {
             isPlayerNearby = true;
+            return;
+        }
+
+        // Networked: only mark nearby for the *local* player's own object
+        if (pv != null && pv.IsMine)
+        {
+            isPlayerNearby = true;
+            return;
+        }
+
+        // As a safety fallback: if there's no PhotonView but it's a PlayerMovement and it appears active, allow interaction
+        if (pv == null && pm != null && pm.enabled)
+        {
+            isPlayerNearby = true;
+            return;
+        }
+
+        // otherwise don't set nearby
     }
 
     void OnTriggerExit2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        if (!other.CompareTag("Player")) return;
+
+        PhotonView pv = other.GetComponent<PhotonView>();
+        PlayerMovement pm = other.GetComponent<PlayerMovement>();
+
+        if (PhotonNetwork.OfflineMode)
+        {
             isPlayerNearby = false;
+            return;
+        }
+
+        if (pv != null && pv.IsMine)
+        {
+            isPlayerNearby = false;
+            return;
+        }
+
+        if (pv == null && pm != null && pm.enabled)
+        {
+            isPlayerNearby = false;
+            return;
+        }
     }
 
-    // This method is called by CodeCheckGame when the player correctly solves the code
     public void OnInteractionComplete()
     {
-        // Tell the minimap to reveal this icon - using correct method and passing the icon GameObject
         if (miniMap != null && minimapIcon != null)
         {
             miniMap.RevealIntercom(minimapIcon);

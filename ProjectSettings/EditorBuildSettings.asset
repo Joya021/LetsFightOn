@@ -9,15 +9,24 @@ EditorBuildSettings:
     path: Assets/Scenes/SampleScene.unity
     guid: 8c9cfa26abfee488c85f1582747f6a02
   - enabled: 1
-    path: Assets/Settings/Scenes/game.unity
-    guid: 390321bae4ffced40abbf0885af23402
-  - enabled: 1
-    path: Assets/Settings/Scenes/home.unity
+    path: Assets/Settings/Scenes/LoginScene.unity
     guid: 37718fe55f1d8a04fb4ccf10e35bbe33
   - enabled: 1
-    path: Assets/Settings/Scenes/Gameload.unity
+    path: Assets/Settings/Scenes/FindRoom.unity
+    guid: 5eb02f1c893bb884688ac40ac2028615
+  - enabled: 1
+    path: Assets/Settings/Scenes/Lobby.unity
+    guid: d26f1fcf93e78334696579619c2c2c89
+  - enabled: 1
+    path: Assets/Settings/Scenes/CSCharPickPage.unity
+    guid: 1a2bd1006be2db146b7fa055656873da
+  - enabled: 1
+    path: Assets/Settings/Scenes/GameLoadingScreen.unity
     guid: 328a150a8df7874438ab5f1964437a53
   - enabled: 1
-    path: Assets/Settings/Scenes/JuneScene.unity
+    path: Assets/Settings/Scenes/GameScene.unity
     guid: 2b2fae67acb72d04eb5d2721f3de3d63
+  - enabled: 0
+    path: Assets/Settings/Scenes/OfflineGameScene.unity
+    guid: 390321bae4ffced40abbf0885af23402
   m_configObjects: {}

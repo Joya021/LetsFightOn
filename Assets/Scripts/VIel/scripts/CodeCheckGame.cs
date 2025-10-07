@@ -27,7 +27,7 @@ public class CodeCheckGame : MonoBehaviour
 
     [Header("Answer Feedback Images")]
     public GameObject[] correctAnswerImages;
-    public GameObject wrongAnswerImage; 
+    public GameObject wrongAnswerImage;
     public float answerImageDisplayTime = 2f;
 
     [Header("Cooldown UI")]
@@ -51,9 +51,13 @@ public class CodeCheckGame : MonoBehaviour
     private string savedInput = "";
     private bool hasBeenSolved = false;
     private bool lastAnswerWasHunterTampered = false;
+    private bool hasRegistered = false;
 
     void Start()
     {
+        // AUTO-REGISTER WITH GAMEMANAGER
+        RegisterWithGameManager();
+
         if (linkedIntercom == null)
         {
             linkedIntercom = GetComponent<InterCom>();
@@ -88,6 +92,70 @@ public class CodeCheckGame : MonoBehaviour
         playerObject = GameObject.FindGameObjectWithTag("Player");
         if (playerObject != null)
             playerMovement = playerObject.GetComponent<PlayerMovement>();
+    }
+
+    void OnEnable()
+    {
+        // Re-register if this object is re-enabled
+        if (!hasRegistered)
+            RegisterWithGameManager();
+    }
+
+    void OnDestroy()
+    {
+        // Unregister from GameManager when destroyed
+        UnregisterFromGameManager();
+    }
+
+    private void RegisterWithGameManager()
+    {
+        if (hasRegistered) return;
+
+        // Find GameManager if not assigned
+        if (gameManager == null)
+        {
+            gameManager = FindObjectOfType<GameManager>();
+        }
+
+        if (gameManager != null)
+        {
+            // Initialize list if null
+            if (gameManager.allCodeGames == null)
+            {
+                gameManager.allCodeGames = new System.Collections.Generic.List<CodeCheckGame>();
+            }
+
+            // Add this CodeCheckGame to the list if not already present
+            if (!gameManager.allCodeGames.Contains(this))
+            {
+                gameManager.allCodeGames.Add(this);
+                hasRegistered = true;
+                Debug.Log($"CodeCheckGame '{gameObject.name}' registered with GameManager. Total: {gameManager.allCodeGames.Count}");
+
+                // Update progress UI
+                gameManager.UpdateProgressText();
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"CodeCheckGame '{gameObject.name}': Could not find GameManager to register with!");
+        }
+    }
+
+    private void UnregisterFromGameManager()
+    {
+        if (gameManager != null && gameManager.allCodeGames != null)
+        {
+            if (gameManager.allCodeGames.Contains(this))
+            {
+                gameManager.allCodeGames.Remove(this);
+                Debug.Log($"CodeCheckGame '{gameObject.name}' unregistered from GameManager. Remaining: {gameManager.allCodeGames.Count}");
+
+                // Update progress UI
+                gameManager.UpdateProgressText();
+            }
+        }
+        hasRegistered = false;
     }
 
     void Update()
