@@ -14,7 +14,6 @@ public class LessonPopup : MonoBehaviour
     public Image learnableObjectImage;
     public Image closeButtonImage1;
     public Image lessonImage;
-    public Image sampleCodeImage;
 
     // Page 2 UI
     public Image learnableObjectImage1;
@@ -27,6 +26,7 @@ public class LessonPopup : MonoBehaviour
     // Page 3 UI
     public Image learnableObjectImage2;
     public Image closeButtonImage3;
+    public Text objectObtainedMessageText;
     public Image successMessageImage;
     public Text successMessageText;
 
@@ -55,7 +55,7 @@ public class LessonPopup : MonoBehaviour
         nextButtonObject.GetComponent<Button>().onClick.AddListener(GoToNextPage);
     }
 
-    public void ShowLesson(Sprite learnableObjectSprite, Sprite learnableObjectSprite1, Sprite learnableObjectSprite2, Sprite closeButtonSprite1, Sprite closeButtonSprite2, Sprite closeButtonSprite3, Sprite lessonSprite, Sprite sampleSprite, Sprite brokenSprite, Sprite successMessageSprite, string expectedFix, string itemID, Inventory inventoryRef, LearnableObject sourceObject)
+    public void ShowLesson(Sprite learnableObjectSprite, Sprite learnableObjectSprite1, Sprite learnableObjectSprite2, Sprite closeButtonSprite1, Sprite closeButtonSprite2, Sprite closeButtonSprite3, Sprite lessonSprite, Sprite brokenSprite, string objectObtainedMessage, Sprite successMessageSprite, string expectedFix, string itemID, Inventory inventoryRef, LearnableObject sourceObject)
     {
         if (playerMovement == null)
             playerMovement = FindObjectOfType<PlayerMovements>();
@@ -74,10 +74,10 @@ public class LessonPopup : MonoBehaviour
         closeButtonImage2.sprite = closeButtonSprite2;
         closeButtonImage3.sprite = closeButtonSprite3;
         lessonImage.sprite = lessonSprite;
-        sampleCodeImage.sprite = sampleSprite;
         brokenCodeImage.sprite = brokenSprite;
         successMessageImage.sprite = successMessageSprite;
 
+        objectObtainedMessageText.text = objectObtainedMessage;
         correctAnswer = expectedFix;
         this.itemID = itemID;
         this.inventory = inventoryRef;
@@ -95,6 +95,11 @@ public class LessonPopup : MonoBehaviour
 
         if (playerMovement != null)
             playerMovement.canMove = true;
+
+        // Reset the trigger guard on the player
+        PlayerInteraction player = FindObjectOfType<PlayerInteraction>();
+        if (player != null)
+            player.ResetLessonFlag(); // Or use ResetLessonFlagDelayed() if needed
     }
 
     private void GoToNextPage()
@@ -135,6 +140,11 @@ public class LessonPopup : MonoBehaviour
 
         // Toggle PaperBG visibility
         paperBG.SetActive(currentPage != 3); // Hide on success page
+
+        // ✅ Enhanced: Toggle close button visibility based on current page
+        closeButtonImage1.gameObject.SetActive(currentPage == 1);
+        closeButtonImage2.gameObject.SetActive(currentPage == 2);
+        closeButtonImage3.gameObject.SetActive(currentPage == 3);
     }
 
     private void CheckAnswer()
@@ -146,6 +156,7 @@ public class LessonPopup : MonoBehaviour
             feedbackText.text = "";
             inventory.AddItem(currentObject);
             currentPage = 3;
+            closeButtonImage3.gameObject.SetActive(true);
             successMessageText.text = "Correct! Item added to inventory.";
 
             // Remove the object from the map
@@ -160,7 +171,7 @@ public class LessonPopup : MonoBehaviour
             feedbackText.text = "❌ Not quite. Try again!";
         }
     }
-    public void ShowLessonFromInventory(Sprite lessonSprite)
+    public void ShowLessonFromInventory(Sprite learnableObjectSprite, Sprite lessonSprite)
     {
         if (playerMovement == null)
             playerMovement = FindObjectOfType<PlayerMovements>();
@@ -171,6 +182,7 @@ public class LessonPopup : MonoBehaviour
         popupPanel.SetActive(true);
         currentPage = 1;
 
+        learnableObjectImage.sprite = learnableObjectSprite;
         lessonImage.sprite = lessonSprite;
 
         // Show only Page 1

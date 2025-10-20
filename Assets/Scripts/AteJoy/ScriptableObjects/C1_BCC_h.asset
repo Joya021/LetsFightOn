@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8c82c1c411bf8d498e76cc6b278174e, type: 3}
+  m_Name: C1_BCC_h
+  m_EditorClassIdentifier: 
+  codeSprite: {fileID: 21300000, guid: 7541e4a472ad4dd409469d1315f2b6b8, type: 3}
+  hintImages:
+  - {fileID: 21300000, guid: dbaf4ed18ce9b314aad49fe975867ddc, type: 3}
+  defaultCodeTemplate: MY_variable<LOCK> = 10</LOCK>
+  validationRules:
+  - {fileID: 11400000, guid: 9a21171cd52c10e40b928fe4f6fede27, type: 2}
+  issueDescription: Constant not in ALL_CAPS.
+  playersAnswer: 
+  pointsToRemember: Constants should be written in ALL_CAPS.

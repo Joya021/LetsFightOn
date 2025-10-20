@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8c82c1c411bf8d498e76cc6b278174e, type: 3}
+  m_Name: C1_BCC_r
+  m_EditorClassIdentifier: 
+  codeSprite: {fileID: 21300000, guid: ed17fc61a9873094d94130e5f15ee287, type: 3}
+  hintImages:
+  - {fileID: 21300000, guid: 7c79017e5c68a564586ee04a517806c9, type: 3}
+  - {fileID: 21300000, guid: fb1c60c98f3615a4c8453fb39d2e8226, type: 3}
+  - {fileID: 21300000, guid: a13b262ef1569c1458c1cfb0f2947619, type: 3}
+  defaultCodeTemplate: '
+
+    <LOCK>def show():</LOCK>
+
+
+    <LOCK>    print(message)</LOCK>'
+  validationRules:
+  - {fileID: 11400000, guid: a2848ca5f40e25f478cdce0004ba3fac, type: 2}
+  issueDescription: '"message" is undefined inside function.
+
+'
+  playersAnswer: 
+  pointsToRemember: All variables used inside a function must be defined before use.

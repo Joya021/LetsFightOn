@@ -236,12 +236,12 @@ MonoBehaviour:
   closeButtonSprite1: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
   closeButtonSprite2: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
   closeButtonSprite3: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
-  lessonSprite: {fileID: 21300000, guid: 18917bb4aad6b674fa5b7ef96dbb03cf, type: 3}
-  sampleCodeSprite: {fileID: 21300000, guid: 081d817954d71374680a1eda30d2f76e, type: 3}
-  brokenCodeSprite: {fileID: 21300000, guid: 15fcecfbe3aca054e9db41abb583aedf, type: 3}
-  successMessageSprite: {fileID: 21300000, guid: 425fb877e5e2d764aa7df1488aea0554, type: 3}
-  expectedFix: '''elseif'''
-  itemID: 3
+  lessonSprite: {fileID: 21300000, guid: 8c7bd90f027926241b3e54f23a2d355c, type: 3}
+  brokenCodeSprite: {fileID: 21300000, guid: b6bfb07fb4f9fc74a989bdc6fa4ee14f, type: 3}
+  expectedFix: 'def print_message():'
+  objectObtainedMessage: Lipstick Obtained!
+  successMessageSprite: {fileID: 21300000, guid: c24332a0ea6252b44a4bc590fecc4b22, type: 3}
+  itemID: 2
 --- !u!95 &31484830531179896
 Animator:
   serializedVersion: 5

@@ -120,7 +120,7 @@ BoxCollider2D:
   m_IsTrigger: 1
   m_UsedByEffector: 0
   m_UsedByComposite: 0
-  m_Offset: {x: -0.20361853, y: -0.0000009536743}
+  m_Offset: {x: -0.00086545944, y: 0.031715155}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
@@ -131,7 +131,7 @@ BoxCollider2D:
     adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
-  m_Size: {x: 8.565555, y: 9.0548115}
+  m_Size: {x: 10.367805, y: 7.130716}
   m_EdgeRadius: 0
 --- !u!95 &3488080610788806121
 Animator:
@@ -173,11 +173,11 @@ MonoBehaviour:
   closeButtonSprite1: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
   closeButtonSprite2: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
   closeButtonSprite3: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
-  lessonSprite: {fileID: 21300000, guid: f48d8edd291c8be4989f7c9d01aa10b5, type: 3}
-  sampleCodeSprite: {fileID: 21300000, guid: 238c8e5793a481d4294ed2d691eeb593, type: 3}
-  brokenCodeSprite: {fileID: 21300000, guid: 2e185668740f67645bd8abe42ead36e1, type: 3}
-  successMessageSprite: {fileID: 21300000, guid: 740dc989214639b4182b12223d3638fa, type: 3}
-  expectedFix: name = "Alice"
+  lessonSprite: {fileID: 21300000, guid: 2e94298b6f1800746b9c3ceabb39f82c, type: 3}
+  brokenCodeSprite: {fileID: 21300000, guid: 2bb79d5b556cc434faa31f7949ea29f7, type: 3}
+  expectedFix: name = "Juan Dela Cruz"
+  objectObtainedMessage: Hat Obtained!
+  successMessageSprite: {fileID: 21300000, guid: c24332a0ea6252b44a4bc590fecc4b22, type: 3}
   itemID: 1
 --- !u!1 &5162502140253198963
 GameObject:

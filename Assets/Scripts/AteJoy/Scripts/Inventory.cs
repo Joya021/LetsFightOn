@@ -7,7 +7,6 @@ public class InventoryItem
     public string itemID;
     public Sprite learnableObjectSprite;
     public Sprite lessonSprite;
-    public Sprite sampleCodeSprite;
 }
 
 public class Inventory : MonoBehaviour
@@ -33,8 +32,7 @@ public class Inventory : MonoBehaviour
         {
             itemID = obj.itemID,
             learnableObjectSprite = obj.learnableObjectSprite,
-            lessonSprite = obj.lessonSprite,
-            sampleCodeSprite = obj.sampleCodeSprite,
+            lessonSprite = obj.lessonSprite
         };
 
         items.Add(newItem);
