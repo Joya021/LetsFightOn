@@ -5,13 +5,6 @@ using Photon.Pun;
 using UnityEngine;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
-/// <summary>
-/// Modified spawn script: uses PrefabRegistry to validate / choose prefabs instead of hardcoded strings.
-/// If PLAYER_CHARACTER (prefab name) exists in the player's custom properties -> we use it (and validate with PrefabRegistry).
-/// If empty, we auto-pick a random prefab from the PrefabRegistry for that role (hunter/survivor).
-/// We still call PhotonNetwork.Instantiate(prefabName, ...) because Photon expects a Resources path by default.
-/// Make sure assigned prefabs in PrefabRegistry are the same assets placed under Resources (name must match).
-/// </summary>
 public class SpawnPlayers : MonoBehaviour
 {
     public Transform[] spawnPoints; // Assign fixed spawn points in the inspector
@@ -46,6 +39,7 @@ public class SpawnPlayers : MonoBehaviour
             players[i].SetCustomProperties(props);
         }
     }
+
 
     IEnumerator WaitAndSpawn()
     {

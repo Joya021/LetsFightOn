@@ -1,103 +1,121 @@
 using UnityEngine;
-using UnityEngine.UI;
+using Photon.Pun;
 
-public class StunController : MonoBehaviour
+public class StunController : MonoBehaviourPunCallbacks
 {
-    public float baseStunRange = 2f;
-    public float nearEnemyStunRange = 4f;
-    public float detectEnemyRange = 5f;
+    [Header("Stun Settings")]
+    public float stunDuration = 3f;
+    public float stunRange = 2f;
+    public LayerMask hunterLayer = 1 << 7; // Hunter layer
     public KeyCode stunKey = KeyCode.E;
-    public LayerMask stunnableLayer;
-    public LayerMask enemyLayer;
 
+    [Header("Cooldown Settings")]
     public float stunCooldown = 5f;
-    private float cooldownTimer = 0f;
+    private float stunTimer = 0f;
 
-    [Header("UI")]
-    public GameObject stunCooldownCanvas; // BG + text
-    public Text cooldownText;
+    private PlayerMovement playerMovement;
+    private PhotonView photonView;
+    private bool isMultiplayer = false;
 
     void Start()
     {
-        if (stunCooldownCanvas != null)
-            stunCooldownCanvas.SetActive(false);
+        playerMovement = GetComponent<PlayerMovement>();
+        photonView = GetComponent<PhotonView>();
+        isMultiplayer = PhotonNetwork.IsConnected && photonView != null;
     }
 
     void Update()
     {
-        // Cooldown logic
-        if (cooldownTimer > 0)
+        // Only handle input for local player
+        if (isMultiplayer && !photonView.IsMine) return;
+
+        // Handle cooldown
+        if (stunTimer > 0)
+            stunTimer -= Time.deltaTime;
+
+        // Handle stun input
+        if (Input.GetKeyDown(stunKey) && CanStun())
         {
-            cooldownTimer -= Time.deltaTime;
+            TryStunHunter();
+        }
+    }
 
-            if (stunCooldownCanvas != null)
-                stunCooldownCanvas.SetActive(true);
-            if (cooldownText != null)
-                cooldownText.text = $"{Mathf.Max(cooldownTimer, 0f):F1}s";
+    bool CanStun()
+    {
+        return stunTimer <= 0f && playerMovement != null && playerMovement.canMove && !playerMovement.isStunned;
+    }
 
-            if (cooldownTimer <= 0f)
+    void TryStunHunter()
+    {
+        if (isMultiplayer)
+        {
+            // Find hunters in multiplayer
+            GameObject[] allPlayers = GameObject.FindGameObjectsWithTag("Player");
+
+            foreach (GameObject playerObj in allPlayers)
             {
-                cooldownTimer = 0f;
-                if (stunCooldownCanvas != null)
-                    stunCooldownCanvas.SetActive(false);
+                PhotonView targetView = playerObj.GetComponent<PhotonView>();
+                if (targetView == null || targetView == photonView) continue;
+
+                // Check if target is hunter
+                if (targetView.Owner.CustomProperties.ContainsKey("PlayerRole"))
+                {
+                    bool targetIsHunter = (bool)targetView.Owner.CustomProperties["PlayerRole"];
+                    if (!targetIsHunter) continue; // Skip survivors
+                }
+
+                float distance = Vector2.Distance(transform.position, playerObj.transform.position);
+                if (distance <= stunRange)
+                {
+                    // Stun the hunter via RPC
+                    photonView.RPC("RPC_StunTarget", RpcTarget.All, targetView.ViewID, stunDuration);
+
+                    stunTimer = stunCooldown;
+                    Debug.Log("Survivor stunned a hunter!");
+                    break;
+                }
             }
         }
-
-        // Prevent stun if player is in CodeCheckGame
-        if (IsInCodeCheckGame()) return;
-
-        // Adjust stun range if enemy nearby
-        bool enemyNearby = Physics2D.OverlapCircle(transform.position, detectEnemyRange, enemyLayer);
-        float stunRange = enemyNearby ? nearEnemyStunRange : baseStunRange;
-
-        // Try stun
-        if (Input.GetKeyDown(stunKey) && cooldownTimer <= 0f)
+        else
         {
-            TryStun(stunRange);
-            StartCooldown();
-        }
-    }
+            // Offline mode - find hunters by layer or tag
+            Collider2D[] nearbyColliders = Physics2D.OverlapCircleAll(transform.position, stunRange, hunterLayer);
 
-    private bool IsInCodeCheckGame()
-    {
-        GameManager gm = FindObjectOfType<GameManager>();
-        if (gm != null)
-        {
-            foreach (var codeGame in gm.allCodeGames)
+            foreach (Collider2D col in nearbyColliders)
             {
-                if (codeGame != null && codeGame.IsBeingInteractedWith)
-                    return true;
+                if (col.gameObject == gameObject) continue; // Skip self
+
+                StunnableScript hunterStunnable = col.GetComponent<StunnableScript>();
+                if (hunterStunnable != null)
+                {
+                    hunterStunnable.Stun(stunDuration);
+                    stunTimer = stunCooldown;
+                    Debug.Log("Survivor stunned a hunter!");
+                    break;
+                }
             }
         }
-        return false;
     }
 
-    public void StartCooldown()
+    [PunRPC]
+    void RPC_StunTarget(int targetViewID, float duration)
     {
-        cooldownTimer = stunCooldown;
-        if (stunCooldownCanvas != null)
-            stunCooldownCanvas.SetActive(true);
-    }
-
-    void TryStun(float stunRange)
-    {
-        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, stunRange, stunnableLayer);
-        foreach (Collider2D hit in hits)
+        PhotonView targetView = PhotonView.Find(targetViewID);
+        if (targetView != null)
         {
-            StunnableScript stunnable = hit.GetComponent<StunnableScript>();
+            StunnableScript stunnable = targetView.GetComponent<StunnableScript>();
             if (stunnable != null)
             {
-                stunnable.Stun();
+                stunnable.Stun(duration);
+                Debug.Log($"Hunter {targetView.gameObject.name} was stunned by survivor!");
             }
         }
     }
 
-    private void OnDrawGizmosSelected()
+    // Visual debug in scene view
+    void OnDrawGizmosSelected()
     {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, baseStunRange);
-
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, detectEnemyRange);
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, stunRange);
     }
 }

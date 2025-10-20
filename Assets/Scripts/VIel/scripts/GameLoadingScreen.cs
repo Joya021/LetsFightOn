@@ -1,57 +1,85 @@
-﻿// GameLoadingScreen.cs
+﻿// MODIFIED GAMELOADINGSCREEN.CS
+// Only small changes needed to maintain proper sync flow
+
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 using Photon.Pun;
 using Photon.Realtime;
+using UnityEngine.SceneManagement;
 
-/// <summary>
-/// Modified to use PrefabRegistry for icons and to avoid relying on string arrays for "Hunter" fallback.
-/// Assign a PrefabRegistry in the scene (or it will try to Find one).
-/// </summary>
 public class GameLoadingScreen : MonoBehaviourPunCallbacks
 {
     [Header("UI Elements")]
     public Text statusText;
     public Text pingText;
-    public GameObject[] playerLoadingSlots; // Each slot should have an Image component for character icon
+    public GameObject[] playerLoadingSlots;
 
     [Header("Scene")]
     public string gameSceneName = "GameScene";
+    public string loadingSceneName = "GameLoadingScreen"; // Changed from "LoadingScreen"
 
     private bool allPlayersReady = false;
     private int playersReady = 0;
+    private bool isCheckingPlayers = false;
 
-    // PrefabRegistry reference (assign via Inspector or the script will Find one)
     public PrefabRegistry prefabRegistry;
 
     void Start()
     {
+        // Only run if we're in the loading screen scene
+        if (!IsInLoadingScene())
+        {
+            enabled = false;
+            return;
+        }
+
+        // *** ENSURE auto-sync stays enabled during loading ***
+        if (!PhotonNetwork.AutomaticallySyncScene)
+        {
+            PhotonNetwork.AutomaticallySyncScene = true;
+            Debug.Log("[GameLoadingScreen] Auto scene sync ENABLED");
+        }
+
         if (prefabRegistry == null)
             prefabRegistry = FindObjectOfType<PrefabRegistry>();
 
-        StartCoroutine(CheckPlayersReady());
+        if (!isCheckingPlayers)
+        {
+            isCheckingPlayers = true;
+            StartCoroutine(CheckPlayersReady());
+        }
+
         DisplayPlayerCharacters();
     }
 
     void Update()
     {
+        if (!IsInLoadingScene())
+            return;
+
         if (pingText != null)
             pingText.text = $"Ping: {PhotonNetwork.GetPing()}ms";
     }
 
+    bool IsInLoadingScene()
+    {
+        string currentScene = SceneManager.GetActiveScene().name;
+        return currentScene == loadingSceneName;
+    }
+
     IEnumerator CheckPlayersReady()
     {
-        while (!allPlayersReady)
+        while (!allPlayersReady && IsInLoadingScene())
         {
             bool pingStable = PhotonNetwork.GetPing() < 150;
 
             if (statusText != null)
             {
                 if (!pingStable)
-                    statusText.text = "Checking connection stability.";
+                    statusText.text = "Checking connection stability...";
                 else
-                    statusText.text = $"Waiting for players. ({playersReady}/{PhotonNetwork.PlayerList.Length})";
+                    statusText.text = $"Waiting for players... ({playersReady}/{PhotonNetwork.PlayerList.Length})";
             }
 
             yield return new WaitForSeconds(0.5f);
@@ -60,12 +88,14 @@ public class GameLoadingScreen : MonoBehaviourPunCallbacks
             {
                 allPlayersReady = true;
                 if (statusText != null)
-                    statusText.text = "All players ready! Starting game.";
+                    statusText.text = "All players ready! Starting game...";
 
                 yield return new WaitForSeconds(2f);
 
-                if (PhotonNetwork.IsMasterClient)
+                // *** Load game scene - all players will follow because AutomaticallySyncScene is true ***
+                if (PhotonNetwork.IsMasterClient && IsInLoadingScene())
                 {
+                    Debug.Log("[GameLoadingScreen] MasterClient loading game scene for ALL players");
                     PhotonNetwork.LoadLevel(gameSceneName);
                 }
             }
@@ -74,6 +104,9 @@ public class GameLoadingScreen : MonoBehaviourPunCallbacks
 
     bool CheckAllPlayersConnected()
     {
+        if (!PhotonNetwork.InRoom)
+            return false;
+
         playersReady = 0;
         foreach (Player player in PhotonNetwork.PlayerList)
         {
@@ -89,12 +122,16 @@ public class GameLoadingScreen : MonoBehaviourPunCallbacks
 
     void DisplayPlayerCharacters()
     {
+        if (!IsInLoadingScene() || playerLoadingSlots == null)
+            return;
+
         Player[] players = PhotonNetwork.PlayerList;
 
         for (int i = 0; i < playerLoadingSlots.Length && i < players.Length; i++)
         {
             GameObject slot = playerLoadingSlots[i];
             if (slot == null) continue;
+
             Image iconImage = slot.GetComponent<Image>();
             slot.SetActive(false);
 
@@ -106,7 +143,6 @@ public class GameLoadingScreen : MonoBehaviourPunCallbacks
 
                 if (string.IsNullOrEmpty(characterName) && prefabRegistry != null)
                 {
-                    // fallback: pick a random one for UI only (prefer registry mapping)
                     GameObject fallback = prefabRegistry.GetRandomPrefab(isHunter);
                     if (fallback != null)
                         characterName = fallback.name;
@@ -122,9 +158,16 @@ public class GameLoadingScreen : MonoBehaviourPunCallbacks
                     if (icon != null)
                         iconImage.sprite = icon;
                     else
-                        iconImage.sprite = null; // no icon assigned in registry
+                        iconImage.sprite = null;
                 }
             }
         }
     }
+
+    void OnDisable()
+    {
+        StopAllCoroutines();
+        isCheckingPlayers = false;
+    }
 }
+

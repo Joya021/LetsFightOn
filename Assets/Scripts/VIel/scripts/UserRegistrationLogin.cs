@@ -2,6 +2,7 @@ using Firebase.Auth;
 using Firebase.Extensions;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
 
 public class UserRegistrationLogin : MonoBehaviour
 {
@@ -13,106 +14,300 @@ public class UserRegistrationLogin : MonoBehaviour
 
     [Header("UI Texts")]
     public Text statusText;
-    public Text displayNameText;   // Shown in the next panel
-    public Text userIdText;        // Shown in the next panel
-    public Text verificationMessageText; // Text in verification message panel
+    public Text displayNameText;
+    public Text userIdText;
+    public Text verificationMessageText;
 
     [Header("Panels")]
-    public GameObject loginPanel;   // The panel with login/register inputs
-    public GameObject userPanel;    // The panel shown after login
-    public GameObject verificationMessagePanel; // Panel for email verification message
+    public GameObject loginPanel;
+    public GameObject userPanel;
+    public GameObject verificationMessagePanel;
+    public GameObject guestSignInPanel;
+    public GameObject newUserPanel;
 
     [Header("Password Toggle Buttons")]
     public Button passwordToggleButton;
     public Button confirmPasswordToggleButton;
 
+    [Header("New User Panel Settings")]
+    [Tooltip("When to show the new user panel")]
+    public NewUserPanelTiming newUserPanelTiming = NewUserPanelTiming.OnRegistration;
+
+    public enum NewUserPanelTiming
+    {
+        OnRegistration,          // Show immediately after registration
+        OnFirstVerifiedLogin,    // Show on first login after email verification
+        OnBoth                   // Show on registration AND first verified login
+    }
+
     private FirebaseAuth auth;
     private bool isPasswordVisible = false;
     private bool isConfirmPasswordVisible = false;
+    private bool isFirebaseReady = false;
+    private const string FIRST_LOGIN_KEY = "HasCompletedFirstLogin_";
 
     void Start()
     {
-        auth = FirebaseAuth.DefaultInstance;
+        // Wait a frame to ensure EventSystem is ready
+        StartCoroutine(InitializeAfterFrame());
+    }
 
-        // Set initial password fields to censored
-        passwordInputField.contentType = InputField.ContentType.Password;
-        confirmPasswordInputField.contentType = InputField.ContentType.Password;
-        passwordInputField.ForceLabelUpdate();
-        confirmPasswordInputField.ForceLabelUpdate();
+    IEnumerator InitializeAfterFrame()
+    {
+        // Wait one frame for scene to fully load
+        yield return null;
 
-        // Hide verification panel at start
+        // Force UI to be interactable
+        ForceEnableButtons();
+
+        // Wait for Firebase to initialize
+        StartCoroutine(WaitForFirebase());
+    }
+
+    void OnEnable()
+    {
+        // Re-enable buttons when scene is reloaded
+        ForceEnableButtons();
+
+        // Re-check Firebase status if we're returning to this script
+        if (auth == null && FirebaseInitializer.Instance != null && FirebaseInitializer.Instance.IsFirebaseReady())
+        {
+            StartCoroutine(ReinitializeAuth());
+        }
+    }
+
+    void ForceEnableButtons()
+    {
+        // Find all buttons in the scene and ensure they're interactable
+        UnityEngine.UI.Button[] buttons = GetComponentsInChildren<UnityEngine.UI.Button>(true);
+        foreach (var btn in buttons)
+        {
+            btn.interactable = true;
+        }
+
+        // Don't force panel states here - let WaitForFirebase handle it
+    }
+
+    IEnumerator ReinitializeAuth()
+    {
+        yield return new WaitForSeconds(0.1f);
+
+        try
+        {
+            auth = FirebaseAuth.DefaultInstance;
+            isFirebaseReady = true;
+
+            // Clear status text
+            if (statusText != null)
+                statusText.text = "";
+
+            // Check if there's a logged-in user
+            CheckAutoLogin();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Failed to reinitialize Firebase Auth: {ex.Message}");
+            if (statusText != null)
+                statusText.text = "Failed to initialize authentication.";
+            isFirebaseReady = false;
+        }
+    }
+
+    IEnumerator WaitForFirebase()
+    {
+        // Hide all panels initially to prevent flickering
+        if (loginPanel != null)
+            loginPanel.SetActive(false);
+
+        if (userPanel != null)
+            userPanel.SetActive(false);
+
         if (verificationMessagePanel != null)
             verificationMessagePanel.SetActive(false);
 
-        // Auto-login if user is already logged in
-        CheckAutoLogin();
+        if (guestSignInPanel != null)
+            guestSignInPanel.SetActive(false);
+
+        if (newUserPanel != null)
+            newUserPanel.SetActive(false);
+
+        // Show loading message
+        if (statusText != null)
+            statusText.text = "Initializing...";
+
+        // Wait until Firebase is ready
+        while (FirebaseInitializer.Instance == null || !FirebaseInitializer.Instance.IsFirebaseReady())
+        {
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        // Firebase is ready, initialize auth
+        try
+        {
+            auth = FirebaseAuth.DefaultInstance;
+            isFirebaseReady = true;
+
+            // Set initial password fields to censored
+            if (passwordInputField != null)
+            {
+                passwordInputField.contentType = InputField.ContentType.Password;
+                passwordInputField.ForceLabelUpdate();
+            }
+
+            if (confirmPasswordInputField != null)
+            {
+                confirmPasswordInputField.contentType = InputField.ContentType.Password;
+                confirmPasswordInputField.ForceLabelUpdate();
+            }
+
+            // Clear status text
+            if (statusText != null)
+                statusText.text = "";
+
+            // Check for existing user first, then decide which panel to show
+            if (auth.CurrentUser != null)
+            {
+                // User exists, let CheckAutoLogin handle panel display
+                CheckAutoLogin();
+            }
+            else
+            {
+                // No user logged in, show login panel
+                if (loginPanel != null)
+                    loginPanel.SetActive(true);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Failed to initialize Firebase Auth: {ex.Message}");
+            if (statusText != null)
+                statusText.text = "Failed to initialize authentication.";
+
+            // Show login panel on error
+            if (loginPanel != null)
+                loginPanel.SetActive(true);
+        }
     }
 
-    // ============================
-    // AUTO LOGIN
-    // ============================
     private void CheckAutoLogin()
     {
+        if (!isFirebaseReady || auth == null)
+            return;
+
         if (auth.CurrentUser != null)
         {
             FirebaseUser user = auth.CurrentUser;
 
-            // Check if email is verified (skip for anonymous users)
-            if (user.IsAnonymous || user.IsEmailVerified)
+            if (user.IsAnonymous)
             {
                 statusText.text = "Auto-login successful!";
                 UpdateUserUI(user);
                 SwitchToUserPanel();
             }
+            else if (user.IsEmailVerified)
+            {
+                statusText.text = "Auto-login successful!";
+                UpdateUserUI(user);
+                SwitchToUserPanel();
+
+                // Check if this is their first login
+                CheckAndShowNewUserPanel(user);
+            }
             else
             {
-                // User is logged in but email not verified
                 statusText.text = "Please verify your email to continue.";
                 ShowVerificationMessage(user.Email);
             }
         }
     }
 
-    // ============================
-    // PASSWORD TOGGLE FUNCTIONS
-    // ============================
+    // Check if user has completed first login and show panel if needed
+    private void CheckAndShowNewUserPanel(FirebaseUser user)
+    {
+        if (newUserPanelTiming == NewUserPanelTiming.OnRegistration)
+            return; // Only show on registration, not on login
+
+        string userKey = FIRST_LOGIN_KEY + user.UserId;
+        bool hasCompletedFirstLogin = PlayerPrefs.GetInt(userKey, 0) == 1;
+
+        if (!hasCompletedFirstLogin)
+        {
+            ShowNewUserPanel();
+        }
+    }
+
+    // Mark that the user has completed their first login
+    public void MarkFirstLoginComplete()
+    {
+        if (auth != null && auth.CurrentUser != null)
+        {
+            string userKey = FIRST_LOGIN_KEY + auth.CurrentUser.UserId;
+            PlayerPrefs.SetInt(userKey, 1);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // Password toggle functions
     public void TogglePasswordVisibility()
     {
+        if (passwordInputField == null) return;
+
         isPasswordVisible = !isPasswordVisible;
-
-        if (isPasswordVisible)
-        {
-            passwordInputField.contentType = InputField.ContentType.Standard;
-        }
-        else
-        {
-            passwordInputField.contentType = InputField.ContentType.Password;
-        }
-
+        passwordInputField.contentType = isPasswordVisible ?
+            InputField.ContentType.Standard : InputField.ContentType.Password;
         passwordInputField.ForceLabelUpdate();
     }
 
     public void ToggleConfirmPasswordVisibility()
     {
+        if (confirmPasswordInputField == null) return;
+
         isConfirmPasswordVisible = !isConfirmPasswordVisible;
-
-        if (isConfirmPasswordVisible)
-        {
-            confirmPasswordInputField.contentType = InputField.ContentType.Standard;
-        }
-        else
-        {
-            confirmPasswordInputField.contentType = InputField.ContentType.Password;
-        }
-
+        confirmPasswordInputField.contentType = isConfirmPasswordVisible ?
+            InputField.ContentType.Standard : InputField.ContentType.Password;
         confirmPasswordInputField.ForceLabelUpdate();
     }
 
-    // ============================
-    // REGISTER USER
-    // ============================
+    // Show Guest Sign In Panel
+    public void ShowGuestSignInPanel()
+    {
+        if (guestSignInPanel != null)
+            guestSignInPanel.SetActive(true);
+    }
+
+    // Close Guest Sign In Panel
+    public void CloseGuestSignInPanel()
+    {
+        if (guestSignInPanel != null)
+            guestSignInPanel.SetActive(false);
+    }
+
+    // Show New User Panel
+    public void ShowNewUserPanel()
+    {
+        if (newUserPanel != null)
+            newUserPanel.SetActive(true);
+    }
+
+    // Close New User Panel
+    public void CloseNewUserPanel()
+    {
+        if (newUserPanel != null)
+            newUserPanel.SetActive(false);
+
+        // Mark first login as complete when they close the panel
+        MarkFirstLoginComplete();
+    }
+
+    // Register User
     public void RegisterUser()
     {
+        if (!isFirebaseReady || auth == null)
+        {
+            statusText.text = "Authentication not ready. Please wait...";
+            return;
+        }
+
         string name = nameInputField.text;
         string email = emailInputField.text;
         string password = passwordInputField.text;
@@ -140,7 +335,6 @@ public class UserRegistrationLogin : MonoBehaviour
 
             FirebaseUser newUser = task.Result.User;
 
-            // Set display name
             UserProfile profile = new UserProfile { DisplayName = name };
             newUser.UpdateUserProfileAsync(profile).ContinueWithOnMainThread(updateTask =>
             {
@@ -148,7 +342,13 @@ public class UserRegistrationLogin : MonoBehaviour
                 {
                     statusText.text = $"Registered as {newUser.DisplayName}";
 
-                    // Send verification email
+                    // Show new user panel based on timing setting
+                    if (newUserPanelTiming == NewUserPanelTiming.OnRegistration ||
+                        newUserPanelTiming == NewUserPanelTiming.OnBoth)
+                    {
+                        ShowNewUserPanel();
+                    }
+
                     SendVerificationEmail(newUser);
                 }
                 else
@@ -159,9 +359,6 @@ public class UserRegistrationLogin : MonoBehaviour
         });
     }
 
-    // ============================
-    // SEND VERIFICATION EMAIL
-    // ============================
     private void SendVerificationEmail(FirebaseUser user)
     {
         user.SendEmailVerificationAsync().ContinueWithOnMainThread(task =>
@@ -178,14 +375,10 @@ public class UserRegistrationLogin : MonoBehaviour
                 return;
             }
 
-            // Show verification message panel
             ShowVerificationMessage(user.Email);
         });
     }
 
-    // ============================
-    // SHOW VERIFICATION MESSAGE
-    // ============================
     private void ShowVerificationMessage(string email)
     {
         if (verificationMessagePanel != null)
@@ -199,20 +392,20 @@ public class UserRegistrationLogin : MonoBehaviour
         }
     }
 
-    // ============================
-    // CLOSE VERIFICATION PANEL
-    // ============================
     public void CloseVerificationPanel()
     {
         if (verificationMessagePanel != null)
             verificationMessagePanel.SetActive(false);
     }
 
-    // ============================
-    // LOGIN USER
-    // ============================
     public void LoginUser()
     {
+        if (!isFirebaseReady || auth == null)
+        {
+            statusText.text = "Authentication not ready. Please wait...";
+            return;
+        }
+
         string email = emailInputField.text;
         string password = passwordInputField.text;
 
@@ -232,7 +425,6 @@ public class UserRegistrationLogin : MonoBehaviour
 
             FirebaseUser user = task.Result.User;
 
-            // Check if email is verified
             if (!user.IsEmailVerified)
             {
                 statusText.text = "Please verify your email before logging in.";
@@ -240,62 +432,62 @@ public class UserRegistrationLogin : MonoBehaviour
                 return;
             }
 
-            // Email is verified, proceed with login
             statusText.text = $"Logged in as {user.DisplayName}";
             UpdateUserUI(user);
             SwitchToUserPanel();
+
+            // Check if this is their first verified login
+            CheckAndShowNewUserPanel(user);
         });
     }
 
-    // ============================
-    // RESEND VERIFICATION EMAIL
-    // ============================
     public void ResendVerificationEmail()
     {
-        if (auth.CurrentUser != null)
-        {
-            SendVerificationEmail(auth.CurrentUser);
-            statusText.text = "Verification email resent!";
-        }
-        else
+        if (!isFirebaseReady || auth == null || auth.CurrentUser == null)
         {
             statusText.text = "No user logged in to resend email.";
+            return;
         }
+
+        SendVerificationEmail(auth.CurrentUser);
+        statusText.text = "Verification email resent!";
     }
 
-    // ============================
-    // CHECK VERIFICATION STATUS
-    // ============================
     public void CheckVerificationStatus()
     {
-        if (auth.CurrentUser != null)
+        if (!isFirebaseReady || auth == null || auth.CurrentUser == null)
+            return;
+
+        auth.CurrentUser.ReloadAsync().ContinueWithOnMainThread(task =>
         {
-            // Reload user data to get updated verification status
-            auth.CurrentUser.ReloadAsync().ContinueWithOnMainThread(task =>
+            if (task.IsCompleted)
             {
-                if (task.IsCompleted)
+                if (auth.CurrentUser.IsEmailVerified)
                 {
-                    if (auth.CurrentUser.IsEmailVerified)
-                    {
-                        statusText.text = "Email verified! Logging in...";
-                        CloseVerificationPanel();
-                        UpdateUserUI(auth.CurrentUser);
-                        SwitchToUserPanel();
-                    }
-                    else
-                    {
-                        statusText.text = "Email not yet verified. Please check your inbox.";
-                    }
+                    statusText.text = "Email verified! Logging in...";
+                    CloseVerificationPanel();
+                    UpdateUserUI(auth.CurrentUser);
+                    SwitchToUserPanel();
+
+                    // Check if this is their first verified login
+                    CheckAndShowNewUserPanel(auth.CurrentUser);
                 }
-            });
-        }
+                else
+                {
+                    statusText.text = "Email not yet verified. Please check your inbox.";
+                }
+            }
+        });
     }
 
-    // ============================
-    // GUEST SIGN-IN
-    // ============================
     public void GuestSignIn()
     {
+        if (!isFirebaseReady || auth == null)
+        {
+            statusText.text = "Authentication not ready. Please wait...";
+            return;
+        }
+
         auth.SignInAnonymouslyAsync().ContinueWithOnMainThread(task =>
         {
             if (task.IsCanceled)
@@ -312,27 +504,43 @@ public class UserRegistrationLogin : MonoBehaviour
 
             FirebaseUser user = task.Result.User;
             statusText.text = "Guest signed in: " + user.UserId;
+
+            // Close the guest sign-in panel on success
+            CloseGuestSignInPanel();
+
             UpdateUserUI(user);
             SwitchToUserPanel();
+
+            // Check if this is their first time as guest and show new user panel
+            CheckAndShowNewUserPanel(user);
         });
     }
 
-    // ============================
-    // LOGOUT USER
-    // ============================
     public void LogoutUser()
     {
+        if (!isFirebaseReady || auth == null)
+            return;
+
         auth.SignOut();
+
+        // Clear input fields
+        if (emailInputField != null) emailInputField.text = "";
+        if (passwordInputField != null) passwordInputField.text = "";
+        if (nameInputField != null) nameInputField.text = "";
+        if (confirmPasswordInputField != null) confirmPasswordInputField.text = "";
+
         statusText.text = "Logged out successfully.";
 
         if (loginPanel != null) loginPanel.SetActive(true);
         if (userPanel != null) userPanel.SetActive(false);
         if (verificationMessagePanel != null) verificationMessagePanel.SetActive(false);
+        if (guestSignInPanel != null) guestSignInPanel.SetActive(false);
+        if (newUserPanel != null) newUserPanel.SetActive(false);
+
+        // Re-enable buttons after logout
+        ForceEnableButtons();
     }
 
-    // ============================
-    // UPDATE UI TEXTS
-    // ============================
     private void UpdateUserUI(FirebaseUser user)
     {
         if (displayNameText != null)
@@ -342,13 +550,24 @@ public class UserRegistrationLogin : MonoBehaviour
             userIdText.text = user.UserId;
     }
 
-    // ============================
-    // PANEL SWITCH
-    // ============================
     private void SwitchToUserPanel()
     {
         if (loginPanel != null) loginPanel.SetActive(false);
         if (userPanel != null) userPanel.SetActive(true);
         if (verificationMessagePanel != null) verificationMessagePanel.SetActive(false);
+        if (guestSignInPanel != null) guestSignInPanel.SetActive(false);
+        // Don't auto-close new user panel here, let the user close it
+    }
+
+    // Optional: Reset first login status (for testing purposes)
+    public void ResetFirstLoginStatus()
+    {
+        if (auth != null && auth.CurrentUser != null)
+        {
+            string userKey = FIRST_LOGIN_KEY + auth.CurrentUser.UserId;
+            PlayerPrefs.DeleteKey(userKey);
+            PlayerPrefs.Save();
+            Debug.Log("First login status reset for current user.");
+        }
     }
 }

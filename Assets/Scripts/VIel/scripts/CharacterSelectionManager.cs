@@ -1,5 +1,4 @@
-﻿// CharacterSelectionManager.cs
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Photon.Pun;
@@ -8,11 +7,6 @@ using UnityEngine.UI;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 using UnityEngine.SceneManagement;
 
-/// <summary>
-/// Modified to require assigned prefabs via inspector for both survivors and hunters.
-/// No hardcoded 'Hunter' name fallback.
-/// Sends the selected prefab's name (prefab.name) to Photon custom properties for consistent spawning.
-/// </summary>
 public class CharacterSelectionManager : MonoBehaviourPunCallbacks
 {
     [System.Serializable]
@@ -22,6 +16,8 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
         public GameObject selectionIndicator;
         [Tooltip("Assign the character prefab directly here (instead of typing name).")]
         public GameObject characterPrefab;
+        [Tooltip("Voiceline that plays when this character is locked in")]
+        public AudioClip lockInVoiceline;
     }
 
     [System.Serializable]
@@ -39,9 +35,22 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
     [Header("Hunter Character Options")]
     public CharacterData[] hunterCharacters;
 
+    [Header("Default Characters")]
+    [Tooltip("Default survivor character prefab (e.g., June)")]
+    public GameObject defaultSurvivorPrefab;
+    [Tooltip("Default hunter character prefab (e.g., RedCloaked)")]
+    public GameObject defaultHunterPrefab;
+
+    [Header("Audio Settings")]
+    [Tooltip("AudioSource for playing character voicelines (local only)")]
+    public AudioSource voicelineAudioSource;
+
     [Header("Role-specific Canvases")]
     public GameObject hunterSelectedCanvas;
     public GameObject survivorSelectedCanvas;
+    [Header("Role Configuration")]
+    [Tooltip("If enabled, all players will be survivors. No hunter will be assigned.")]
+    public bool allSurvivorsMode = false;
 
     [Header("UI Elements")]
     public Button lockInButton;
@@ -51,7 +60,8 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
     public Text timerText;
 
     [Header("Selected Character Panel")]
-    public SelectedPlayerUI[] playerSlots;
+    [Tooltip("First 3 slots should be for survivors (horizontally aligned), 4th slot for hunter (below survivors)")]
+    public SelectedPlayerUI[] playerSlots; // Ensure you have at least 4 slots in Inspector
 
     [Header("Timer Settings")]
     public float selectionTime = 15f;
@@ -73,8 +83,24 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
     {
         remainingTime = selectionTime;
 
+        // Setup AudioSource if not assigned
+        if (voicelineAudioSource == null)
+        {
+            voicelineAudioSource = gameObject.GetComponent<AudioSource>();
+            if (voicelineAudioSource == null)
+            {
+                voicelineAudioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+
+        // *** CRITICAL: Enable auto-sync for character selection → game transition ***
+        PhotonNetwork.AutomaticallySyncScene = true;
+        Debug.Log("[CharacterSelection] Auto scene sync ENABLED");
+
+        // CRITICAL: Clear old timer when scene loads (fixes timer issue when returning from game)
         if (PhotonNetwork.IsMasterClient)
         {
+            ClearOldSelectionTimer();
             AssignUniqueRolesToPlayers();
             SetSelectionEndTime();
         }
@@ -83,11 +109,32 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
             if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(SELECTION_END_TIME_KEY))
             {
                 selectionEndTime = (double)PhotonNetwork.CurrentRoom.CustomProperties[SELECTION_END_TIME_KEY];
-                timerStarted = true;
+
+                // Check if timer is already expired (when returning from game scene)
+                if (PhotonNetwork.Time >= selectionEndTime)
+                {
+                    Debug.Log("[CharacterSelection] Old timer detected, waiting for MasterClient to reset");
+                    timerStarted = false;
+                }
+                else
+                {
+                    timerStarted = true;
+                }
             }
         }
 
         StartCoroutine(WaitForRoleAssignment());
+    }
+
+    void ClearOldSelectionTimer()
+    {
+        if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(SELECTION_END_TIME_KEY))
+        {
+            Hashtable roomProps = new Hashtable();
+            roomProps[SELECTION_END_TIME_KEY] = null;
+            PhotonNetwork.CurrentRoom.SetCustomProperties(roomProps);
+            Debug.Log("[CharacterSelection] Cleared old selection timer");
+        }
     }
 
     void AssignUniqueRolesToPlayers()
@@ -99,7 +146,22 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
         {
             Hashtable clearProps = new Hashtable();
             clearProps[PLAYER_ROLE] = null;
+            clearProps[PLAYER_CHARACTER] = null;
+            clearProps[PLAYER_LOCKED_IN] = false;
             p.SetCustomProperties(clearProps);
+        }
+
+        if (allSurvivorsMode)
+        {
+            foreach (Player p in players)
+            {
+                Hashtable survivorProp = new Hashtable();
+                survivorProp[PLAYER_ROLE] = false; // false = survivor
+                p.SetCustomProperties(survivorProp);
+            }
+
+            Debug.Log("[RoleAssignment] All-Survivors Mode ENABLED - no hunters assigned");
+            return;
         }
 
         int hunterIndex = Random.Range(0, players.Length);
@@ -122,19 +184,13 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
 
     void SetSelectionEndTime()
     {
-        if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(SELECTION_END_TIME_KEY))
-        {
-            Hashtable roomProps = new Hashtable();
-            roomProps[SELECTION_END_TIME_KEY] = PhotonNetwork.Time + selectionTime;
-            PhotonNetwork.CurrentRoom.SetCustomProperties(roomProps);
-            selectionEndTime = PhotonNetwork.Time + selectionTime;
-        }
-        else
-        {
-            selectionEndTime = (double)PhotonNetwork.CurrentRoom.CustomProperties[SELECTION_END_TIME_KEY];
-        }
-
+        Hashtable roomProps = new Hashtable();
+        roomProps[SELECTION_END_TIME_KEY] = PhotonNetwork.Time + selectionTime;
+        PhotonNetwork.CurrentRoom.SetCustomProperties(roomProps);
+        selectionEndTime = PhotonNetwork.Time + selectionTime;
         timerStarted = true;
+
+        Debug.Log($"[CharacterSelection] New timer set: {selectionTime}s");
     }
 
     IEnumerator WaitForRoleAssignment()
@@ -154,7 +210,54 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
             roleText.text = isHunter ? "HUNTER" : "SURVIVOR";
 
         SetupCharacterSelection();
+        ShowDefaultCharacter();
         UpdateSelectedCharacterPanel();
+    }
+
+    void ShowDefaultCharacter()
+    {
+        if (selectedCharacterDisplay != null && selectedCharacterIcon != null)
+        {
+            selectedCharacterDisplay.SetActive(true);
+
+            GameObject defaultPrefab = isHunter ? defaultHunterPrefab : defaultSurvivorPrefab;
+
+            if (defaultPrefab != null)
+            {
+                int defaultIndex = FindCharacterIndexByPrefab(defaultPrefab);
+
+                if (defaultIndex >= 0 && defaultIndex < currentCharacters.Length)
+                {
+                    if (currentCharacters[defaultIndex].selectionIndicator != null)
+                    {
+                        currentCharacters[defaultIndex].selectionIndicator.SetActive(true);
+                    }
+
+                    selectedCharacterIndex = defaultIndex;
+
+                    Image btnImg = currentCharacters[defaultIndex].characterButton?.GetComponent<Image>();
+                    if (btnImg != null)
+                    {
+                        selectedCharacterIcon.sprite = btnImg.sprite;
+                        selectedCharacterIcon.color = btnImg.color;
+                    }
+                }
+            }
+        }
+    }
+
+    int FindCharacterIndexByPrefab(GameObject prefab)
+    {
+        if (prefab == null) return -1;
+
+        for (int i = 0; i < currentCharacters.Length; i++)
+        {
+            if (currentCharacters[i].characterPrefab == prefab)
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     void SetupCharacterSelection()
@@ -176,10 +279,8 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
         {
             lockInButton.onClick.RemoveAllListeners();
             lockInButton.onClick.AddListener(LockInCharacter);
-            lockInButton.interactable = false;
+            lockInButton.interactable = true;
         }
-
-        selectedCharacterDisplay?.SetActive(false);
     }
 
     void Update()
@@ -196,11 +297,12 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
             {
                 if (!isLockedIn)
                 {
-                    AutoPickRandomCharacter();
+                    AutoPickDefaultCharacter();
                 }
 
                 if (PhotonNetwork.IsMasterClient)
                 {
+                    Debug.Log("[CharacterSelection] MasterClient loading game scene for ALL players");
                     PhotonNetwork.LoadLevel("GameLoadingScreen");
                 }
 
@@ -222,6 +324,18 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
         selectedCharacterIndex = characterIndex;
         currentCharacters[selectedCharacterIndex].selectionIndicator?.SetActive(true);
 
+        if (selectedCharacterDisplay != null && selectedCharacterIcon != null)
+        {
+            selectedCharacterDisplay.SetActive(true);
+
+            Image btnImg = currentCharacters[selectedCharacterIndex].characterButton?.GetComponent<Image>();
+            if (btnImg != null)
+            {
+                selectedCharacterIcon.sprite = btnImg.sprite;
+                selectedCharacterIcon.color = btnImg.color;
+            }
+        }
+
         if (lockInButton != null)
             lockInButton.interactable = true;
     }
@@ -232,19 +346,39 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
 
         if (selectedCharacterIndex < 0)
         {
-            AutoPickRandomCharacter();
+            AutoPickDefaultCharacter();
             return;
         }
 
         CommitCharacterSelection();
     }
 
-    private void AutoPickRandomCharacter()
+    private void AutoPickDefaultCharacter()
     {
         if (currentCharacters.Length == 0) return;
 
-        if (selectedCharacterIndex < 0)
-            selectedCharacterIndex = Random.Range(0, currentCharacters.Length);
+        GameObject defaultPrefab = isHunter ? defaultHunterPrefab : defaultSurvivorPrefab;
+
+        if (defaultPrefab != null)
+        {
+            int defaultIndex = FindCharacterIndexByPrefab(defaultPrefab);
+
+            if (defaultIndex >= 0)
+            {
+                selectedCharacterIndex = defaultIndex;
+                Debug.Log($"[CharacterSelection] Auto-picked default character: {defaultPrefab.name}");
+            }
+            else
+            {
+                selectedCharacterIndex = 0;
+                Debug.LogWarning($"[CharacterSelection] Default prefab not found in character list, using first character");
+            }
+        }
+        else
+        {
+            selectedCharacterIndex = 0;
+            Debug.LogWarning($"[CharacterSelection] No default prefab assigned, using first character");
+        }
 
         CommitCharacterSelection();
     }
@@ -260,7 +394,7 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
 
             if (selectedCharacterIndex >= 0 && selectedCharacterIndex < currentCharacters.Length)
             {
-                Image btnImg = currentCharacters[selectedCharacterIndex].characterButton.GetComponent<Image>();
+                Image btnImg = currentCharacters[selectedCharacterIndex].characterButton?.GetComponent<Image>();
                 if (btnImg != null)
                 {
                     selectedCharacterIcon.sprite = btnImg.sprite;
@@ -268,6 +402,9 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
                 }
             }
         }
+
+        // *** NEW: Play character voiceline (local only) ***
+        PlayCharacterVoiceline();
 
         string prefabName = "";
         if (selectedCharacterIndex >= 0 && selectedCharacterIndex < currentCharacters.Length)
@@ -282,6 +419,7 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
         Hashtable props = new Hashtable();
         props[PLAYER_CHARACTER] = prefabName;
         props[PLAYER_LOCKED_IN] = true;
+        props["CharacterIndex"] = selectedCharacterIndex;
         PhotonNetwork.LocalPlayer.SetCustomProperties(props);
 
         foreach (var charData in currentCharacters)
@@ -293,8 +431,36 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
         if (lockInButton != null)
             lockInButton.interactable = false;
 
-        Debug.Log($"[CharacterSelection] {PhotonNetwork.NickName} selected prefab: {prefabName}");
+        Debug.Log($"[CharacterSelection] {PhotonNetwork.NickName} selected prefab: {prefabName}, CharacterIndex: {selectedCharacterIndex}");
         UpdateSelectedCharacterPanel();
+    }
+
+    // *** NEW: Play voiceline for the selected character (local only) ***
+    private void PlayCharacterVoiceline()
+    {
+        if (voicelineAudioSource == null)
+        {
+            Debug.LogWarning("[CharacterSelection] No AudioSource assigned for voicelines");
+            return;
+        }
+
+        if (selectedCharacterIndex < 0 || selectedCharacterIndex >= currentCharacters.Length)
+        {
+            Debug.LogWarning("[CharacterSelection] Invalid character index for voiceline");
+            return;
+        }
+
+        AudioClip voiceline = currentCharacters[selectedCharacterIndex].lockInVoiceline;
+
+        if (voiceline != null)
+        {
+            voicelineAudioSource.PlayOneShot(voiceline);
+            Debug.Log($"[CharacterSelection] Playing voiceline for {currentCharacters[selectedCharacterIndex].characterPrefab?.name}");
+        }
+        else
+        {
+            Debug.Log($"[CharacterSelection] No voiceline assigned for {currentCharacters[selectedCharacterIndex].characterPrefab?.name}");
+        }
     }
 
     private Sprite GetCharacterIconByPrefabName(string prefabName, bool isHunter)
@@ -316,42 +482,111 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
     {
         Player[] players = PhotonNetwork.PlayerList;
 
-        for (int i = 0; i < playerSlots.Length; i++)
+        List<Player> survivors = new List<Player>();
+        Player hunterPlayer = null;
+
+        foreach (Player p in players)
         {
-            if (i >= players.Length)
-            {
-                playerSlots[i].container.SetActive(false);
-                continue;
-            }
-
-            Player p = players[i];
-            playerSlots[i].container.SetActive(true);
-
-            playerSlots[i].playerNameText.text = p.NickName;
-
             bool playerIsHunter = p.CustomProperties.ContainsKey(PLAYER_ROLE) && (bool)p.CustomProperties[PLAYER_ROLE];
-            playerSlots[i].roleText.text = playerIsHunter ? "Hunter" : "Survivor";
 
-            if (p.CustomProperties.ContainsKey(PLAYER_LOCKED_IN) && (bool)p.CustomProperties[PLAYER_LOCKED_IN])
+            if (playerIsHunter)
             {
-                string prefabName = p.CustomProperties[PLAYER_CHARACTER] as string;
-                Sprite selectedIcon = GetCharacterIconByPrefabName(prefabName, playerIsHunter);
+                hunterPlayer = p;
+            }
+            else
+            {
+                survivors.Add(p);
+            }
+        }
 
-                if (selectedIcon != null)
+        int slotIndex = 0;
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (i < survivors.Count)
+            {
+                DisplayPlayerInSlot(playerSlots[slotIndex], survivors[i], false);
+            }
+            else
+            {
+                playerSlots[slotIndex].container.SetActive(false);
+            }
+            slotIndex++;
+        }
+
+        if (hunterPlayer != null && slotIndex < playerSlots.Length)
+        {
+            DisplayPlayerInSlot(playerSlots[slotIndex], hunterPlayer, true);
+            slotIndex++;
+        }
+
+        for (int i = slotIndex; i < playerSlots.Length; i++)
+        {
+            playerSlots[i].container.SetActive(false);
+        }
+    }
+
+    // FIXED: Helper method to display player info in a slot
+    private void DisplayPlayerInSlot(SelectedPlayerUI slot, Player p, bool isHunterSlot)
+    {
+        slot.container.SetActive(true);
+
+        // FIXED: Call SetPlayerInfo on UserInfoDisplay
+        UserInfoDisplay userInfo = slot.container.GetComponent<UserInfoDisplay>();
+        if (userInfo != null)
+        {
+            userInfo.SetPlayerInfo(p.NickName);
+            Debug.Log($"[CharacterSelection] Slot: Set player name to '{p.NickName}'");
+        }
+        else
+        {
+            // Fallback: set text directly
+            if (slot.playerNameText != null)
+                slot.playerNameText.text = p.NickName;
+            Debug.LogWarning("[CharacterSelection] No UserInfoDisplay component found on slot container");
+        }
+
+        bool playerIsHunter = p.CustomProperties.ContainsKey(PLAYER_ROLE) && (bool)p.CustomProperties[PLAYER_ROLE];
+        if (slot.roleText != null)
+            slot.roleText.text = playerIsHunter ? "Hunter" : "Survivor";
+
+        if (p.CustomProperties.ContainsKey(PLAYER_LOCKED_IN) && (bool)p.CustomProperties[PLAYER_LOCKED_IN])
+        {
+            string prefabName = p.CustomProperties[PLAYER_CHARACTER] as string;
+            Sprite selectedIcon = GetCharacterIconByPrefabName(prefabName, playerIsHunter);
+
+            if (selectedIcon != null)
+            {
+                slot.characterIcon.sprite = selectedIcon;
+                slot.characterIcon.color = Color.white;
+            }
+            else
+            {
+                slot.characterIcon.sprite = null;
+                slot.characterIcon.color = Color.clear;
+            }
+        }
+        else
+        {
+            GameObject defaultPrefab = playerIsHunter ? defaultHunterPrefab : defaultSurvivorPrefab;
+            if (defaultPrefab != null)
+            {
+                Sprite defaultIcon = GetCharacterIconByPrefabName(defaultPrefab.name, playerIsHunter);
+                if (defaultIcon != null)
                 {
-                    playerSlots[i].characterIcon.sprite = selectedIcon;
-                    playerSlots[i].characterIcon.color = Color.white;
+                    slot.characterIcon.sprite = defaultIcon;
+                    slot.characterIcon.color = new Color(1f, 1f, 1f, 0.5f);
                 }
                 else
                 {
-                    playerSlots[i].characterIcon.sprite = null;
-                    playerSlots[i].characterIcon.color = Color.clear;
+                    slot.characterIcon.sprite = null;
+                    slot.characterIcon.color = Color.clear;
                 }
             }
             else
             {
-                playerSlots[i].characterIcon.sprite = null;
-                playerSlots[i].characterIcon.color = Color.clear;
+                slot.characterIcon.sprite = null;
+                slot.characterIcon.color = Color.clear;
             }
         }
     }
@@ -368,8 +603,27 @@ public class CharacterSelectionManager : MonoBehaviourPunCallbacks
     {
         if (propertiesThatChanged.ContainsKey(SELECTION_END_TIME_KEY))
         {
-            selectionEndTime = (double)propertiesThatChanged[SELECTION_END_TIME_KEY];
-            timerStarted = true;
+            object endTimeObj = propertiesThatChanged[SELECTION_END_TIME_KEY];
+
+            if (endTimeObj == null)
+            {
+                timerStarted = false;
+                Debug.Log("[CharacterSelection] Timer cleared by MasterClient");
+                return;
+            }
+
+            selectionEndTime = (double)endTimeObj;
+
+            if (PhotonNetwork.Time < selectionEndTime)
+            {
+                timerStarted = true;
+                Debug.Log("[CharacterSelection] Timer updated from room properties");
+            }
+            else
+            {
+                timerStarted = false;
+                Debug.Log("[CharacterSelection] Received expired timer, not starting");
+            }
         }
     }
 }

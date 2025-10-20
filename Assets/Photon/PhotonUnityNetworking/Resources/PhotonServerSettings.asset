@@ -45,6 +45,27 @@ MonoBehaviour:
   - RPC_TamperCode
   - RPC_Stun
   - RPC_Unstun
+  - RPC_ActivateAuraFarm
+  - RPC_ActivateGrog
+  - RPC_GameOver
+  - RPC_MarkAsSolved
+  - RPC_UpdateInput
+  - RPC_MarkAsCorrect
+  - RPC_MarkAsWrong
+  - RPC_SyncInputField
+  - RPC_SetIntercomPosition
+  - <SpawnIntercomsWithDelay>g__RPC_SetIntercomPosition|7_0
+  - <OnTriggerEnter2D>g__SetPosition|13_0
+  - RPC_UnlockMovement
+  - RPC_MarkAsCompleted
+  - RPC_OnTampered
+  - RPC_StunTarget
+  - RPC_ShowQuickChat
+  - RPC_ShowQuickChatToSurvivors
+  - RPC_AddGameplayLog
+  - RPC_RevealMinimapIcon
+  - RPC_StunHunter
+  - RPC_StunHunterTarget
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

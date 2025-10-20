@@ -1,38 +1,28 @@
-﻿using UnityEngine;
-using UnityEngine.UI;
+﻿using Photon.Pun;
 using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
 
-[System.Serializable]
-public class CodeTask
+public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
 {
-    public string instruction;
-    public string correctAnswer;
-    public string startingInput;
-}
-
-public class CodeCheckGame : MonoBehaviour
-{
-    [Header("References")]
-    public GameManager gameManager;
-    public HunterChaseAndHack hunter;
-    private PlayerMovement playerMovement;
-    private GameObject playerObject;
-    public InterCom linkedIntercom;
-
-    [Header("UI Elements")]
-    public InputField codeInputField;
-    public Text taskText;
+    [Header("Overlay Panel (assign inside prefab)")]
+    [Tooltip("Drag the overlay panel (child GameObject) of this intercom prefab here.")]
     public GameObject overlayPanel;
-    public Button checkButton;
 
-    [Header("Answer Feedback Images")]
+    [Header("UI Elements - will be fetched from overlayPanel")]
+    private InputField codeInputField;
+    private Text taskText;
+    private Button checkButton;
+
+    [Header("Answer Feedback Images - Individual per Intercom")]
     public GameObject[] correctAnswerImages;
     public GameObject wrongAnswerImage;
     public float answerImageDisplayTime = 2f;
 
-    [Header("Cooldown UI")]
-    public GameObject interactCooldownCanvas;
-    public Text interactCooldownText;
+    [Header("Cooldown UI - Individual")]
+    private GameObject interactCooldownCanvas;
+    private Text interactCooldownText;
 
     [Header("Target Object")]
     public GameObject triggeredObject;
@@ -42,9 +32,24 @@ public class CodeCheckGame : MonoBehaviour
 
     [Header("Cooldown Settings")]
     public float interactCooldown = 5f;
+    public float cooldownTimer = 0f;
     [HideInInspector] public bool isOnCooldown = false;
 
     public bool IsBeingInteractedWith { get; private set; } = false;
+
+    private static List<int> usedTaskIndices = new List<int>();
+    private static bool isTaskAssignmentInitialized = false;
+
+    private static CodeCheckGame currentActiveIntercom = null;
+
+    private GameManager gameManager;
+    private GameObject playerObject;
+    private PlayerMovement playerMovement;
+    private HunterController hunterController;
+    private InterCom linkedIntercom;
+    private PhotonView photonView;
+
+    private int intercomID = -1;
 
     private TaskManager.CodeTask assignedTask;
     private bool isTriggered = false;
@@ -53,25 +58,166 @@ public class CodeCheckGame : MonoBehaviour
     private bool lastAnswerWasHunterTampered = false;
     private bool hasRegistered = false;
 
+    private string networkSavedInput = "";
+    private bool networkHasBeenSolved = false;
+    private Color networkColor = Color.white;
+
+    [Header("Minimap Integration")]
+    public GameObject minimapIcon;
+    private MiniMap miniMap;
+    private bool minimapRevealed = false; // NEW: Track if minimap icon has been revealed
+
+    void Awake()
+    {
+        photonView = GetComponent<PhotonView>();
+
+        if (photonView != null && photonView.InstantiationData != null && photonView.InstantiationData.Length > 0)
+        {
+            intercomID = (int)photonView.InstantiationData[0];
+        }
+        else if (intercomID == -1)
+        {
+            Vector3 pos = transform.position;
+            intercomID = Mathf.RoundToInt(pos.x * 1000 + pos.y * 1000 + pos.z * 1000);
+        }
+
+        if (triggeredObject == null)
+            triggeredObject = gameObject;
+    }
+
     void Start()
     {
-        // AUTO-REGISTER WITH GAMEMANAGER
-        RegisterWithGameManager();
-
-        if (linkedIntercom == null)
+        gameManager = FindObjectOfType<GameManager>();
+        miniMap = FindObjectOfType<MiniMap>();
+        linkedIntercom = GetComponent<InterCom>();
+        if (gameManager != null && gameManager.allCodeGames != null && !hasRegistered)
         {
-            linkedIntercom = GetComponent<InterCom>();
-            if (linkedIntercom == null)
+            gameManager.RegisterCodeCheckGame(this);
+            hasRegistered = true;
+            Debug.Log($"[CodeCheckGame] ✓ {gameObject.name} registered immediately in Start");
+        }
+        // NEW: Hide minimap icon initially for survivors
+        if (minimapIcon != null && gameManager != null)
+        {
+            if (gameManager.localPlayerIsSurvivor)
             {
-                Debug.LogWarning("No InterCom script found on this GameObject! Please ensure it's on the same object or assigned manually.");
+                minimapIcon.SetActive(false);
+            }
+            else if (gameManager.localPlayerIsHunter)
+            {
+                // Hunter can see all intercom icons from the start
+                minimapIcon.SetActive(true);
+                minimapRevealed = true;
+            }
+        }
+        if (!hasRegistered)
+        {
+            StartCoroutine(RegisterWithGameManagerRoutine());
+        }
+        if (overlayPanel == null)
+        {
+            Transform child = transform.Find("OverlayPanel");
+            if (child != null)
+            {
+                overlayPanel = child.gameObject;
             }
         }
 
+        if (overlayPanel != null)
+        {
+            FindUIComponentsInPanel();
+            SetupUIEvents();
+            overlayPanel.SetActive(false);
+        }
+
+        HideFeedbackImages();
+
+        
+
+        StartCoroutine(FindLocalPlayerRoutine());
+
+        AssignDeterministicTask();
+    }
+
+    void HideFeedbackImages()
+    {
+        if (wrongAnswerImage != null)
+            wrongAnswerImage.SetActive(false);
+
+        if (correctAnswerImages != null)
+        {
+            foreach (var img in correctAnswerImages)
+            {
+                if (img != null) img.SetActive(false);
+            }
+        }
+    }
+
+    void FindUIComponentsInPanel()
+    {
+        if (overlayPanel == null) return;
+
+        codeInputField = overlayPanel.GetComponentInChildren<InputField>();
+
+        Transform tTask = overlayPanel.transform.Find("TaskText");
+        if (tTask != null) taskText = tTask.GetComponent<Text>();
+        if (taskText == null)
+        {
+            Text[] texts = overlayPanel.GetComponentsInChildren<Text>(true);
+            foreach (var t in texts)
+            {
+                if (t.name.ToLower().Contains("task") || t.name.ToLower().Contains("instruction"))
+                {
+                    taskText = t;
+                    break;
+                }
+            }
+            if (taskText == null && texts.Length > 0) taskText = texts[0];
+        }
+
+        Transform tBtn = overlayPanel.transform.Find("CheckButton");
+        if (tBtn != null) checkButton = tBtn.GetComponent<Button>();
+        if (checkButton == null)
+        {
+            Button[] buttons = overlayPanel.GetComponentsInChildren<Button>(true);
+            if (buttons.Length > 0) checkButton = buttons[0];
+        }
+
+        Transform correctParent = overlayPanel.transform.Find("CorrectAnswerImages");
+        if (correctParent != null)
+        {
+            correctAnswerImages = new GameObject[correctParent.childCount];
+            for (int i = 0; i < correctParent.childCount; i++)
+            {
+                correctAnswerImages[i] = correctParent.GetChild(i).gameObject;
+            }
+        }
+
+        Transform wrongT = overlayPanel.transform.Find("WrongAnswerImage");
+        if (wrongT != null) wrongAnswerImage = wrongT.gameObject;
+
+        Transform cooldownT = overlayPanel.transform.Find("CooldownCanvas");
+        if (cooldownT != null)
+        {
+            interactCooldownCanvas = cooldownT.gameObject;
+            Transform ct = cooldownT.Find("CooldownText");
+            if (ct != null) interactCooldownText = ct.GetComponent<Text>();
+        }
+    }
+
+    void SetupUIEvents()
+    {
         if (checkButton != null)
+        {
+            checkButton.onClick.RemoveAllListeners();
             checkButton.onClick.AddListener(CheckAnswer);
+        }
 
         if (codeInputField != null)
+        {
+            codeInputField.onValueChanged.RemoveAllListeners();
             codeInputField.onValueChanged.AddListener(OnInputChanged);
+        }
 
         if (overlayPanel != null)
             overlayPanel.SetActive(false);
@@ -79,130 +225,229 @@ public class CodeCheckGame : MonoBehaviour
         if (interactCooldownCanvas != null)
             interactCooldownCanvas.SetActive(false);
 
-        // Hide answer feedback images at start
-        if (wrongAnswerImage != null)
-            wrongAnswerImage.SetActive(false);
+        HideFeedbackImages();
+    }
 
-        foreach (GameObject img in correctAnswerImages)
+    IEnumerator RegisterWithGameManagerRoutine()
+    {
+        // CRITICAL FIX: Wait a bit before starting registration attempts
+        yield return new WaitForSeconds(0.5f);
+
+        int attempts = 0;
+        int maxAttempts = 30; // Increased from 20
+
+        while (!hasRegistered && attempts < maxAttempts)
         {
-            if (img != null)
-                img.SetActive(false);
+            attempts++;
+
+            // Try to find GameManager
+            if (gameManager == null)
+            {
+                gameManager = FindObjectOfType<GameManager>();
+            }
+
+            if (gameManager != null)
+            {
+                // CRITICAL: Verify GameManager's allCodeGames list exists
+                if (gameManager.allCodeGames != null)
+                {
+                    gameManager.RegisterCodeCheckGame(this);
+                    hasRegistered = true;
+                    Debug.Log($"[CodeCheckGame] ✓ {gameObject.name} successfully registered on attempt {attempts}");
+                    yield break;
+                }
+                else
+                {
+                    Debug.LogWarning($"[CodeCheckGame] {gameObject.name}: GameManager found but allCodeGames is null (attempt {attempts})");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[CodeCheckGame] {gameObject.name}: GameManager not found (attempt {attempts})");
+            }
+
+            // Wait longer between attempts
+            yield return new WaitForSeconds(0.3f);
         }
 
-        playerObject = GameObject.FindGameObjectWithTag("Player");
-        if (playerObject != null)
-            playerMovement = playerObject.GetComponent<PlayerMovement>();
+        if (!hasRegistered)
+        {
+            
+            Debug.LogError($"[CodeCheckGame] ❌ {gameObject.name} FAILED to register after {maxAttempts} attempts!");
+
+            yield return new WaitForSeconds(1f);
+
+            if (gameManager == null)
+                gameManager = FindObjectOfType<GameManager>();
+
+            if (gameManager != null && gameManager.allCodeGames != null)
+            {
+                gameManager.RegisterCodeCheckGame(this);
+                hasRegistered = true;
+                Debug.Log($"[CodeCheckGame] ✓ {gameObject.name} registered on FINAL attempt!");
+            }
+        }
     }
 
     void OnEnable()
     {
-        // Re-register if this object is re-enabled
         if (!hasRegistered)
-            RegisterWithGameManager();
+        {
+            // Try immediate registration first
+            if (gameManager != null && gameManager.allCodeGames != null)
+            {
+                gameManager.RegisterCodeCheckGame(this);
+                hasRegistered = true;
+                Debug.Log($"[CodeCheckGame] ✓ {gameObject.name} registered immediately in OnEnable");
+            }
+            else
+            {
+                // Fall back to coroutine
+                StartCoroutine(RegisterWithGameManagerRoutine());
+            }
+        }
     }
 
     void OnDestroy()
     {
-        // Unregister from GameManager when destroyed
-        UnregisterFromGameManager();
-    }
-
-    private void RegisterWithGameManager()
-    {
-        if (hasRegistered) return;
-
-        // Find GameManager if not assigned
-        if (gameManager == null)
-        {
-            gameManager = FindObjectOfType<GameManager>();
-        }
-
         if (gameManager != null)
-        {
-            // Initialize list if null
-            if (gameManager.allCodeGames == null)
-            {
-                gameManager.allCodeGames = new System.Collections.Generic.List<CodeCheckGame>();
-            }
+            gameManager.UnregisterCodeCheckGame(this);
 
-            // Add this CodeCheckGame to the list if not already present
-            if (!gameManager.allCodeGames.Contains(this))
-            {
-                gameManager.allCodeGames.Add(this);
-                hasRegistered = true;
-                Debug.Log($"CodeCheckGame '{gameObject.name}' registered with GameManager. Total: {gameManager.allCodeGames.Count}");
-
-                // Update progress UI
-                gameManager.UpdateProgressText();
-            }
-        }
-        else
-        {
-            Debug.LogWarning($"CodeCheckGame '{gameObject.name}': Could not find GameManager to register with!");
-        }
-    }
-
-    private void UnregisterFromGameManager()
-    {
-        if (gameManager != null && gameManager.allCodeGames != null)
-        {
-            if (gameManager.allCodeGames.Contains(this))
-            {
-                gameManager.allCodeGames.Remove(this);
-                Debug.Log($"CodeCheckGame '{gameObject.name}' unregistered from GameManager. Remaining: {gameManager.allCodeGames.Count}");
-
-                // Update progress UI
-                gameManager.UpdateProgressText();
-            }
-        }
-        hasRegistered = false;
+        if (currentActiveIntercom == this) currentActiveIntercom = null;
     }
 
     void Update()
     {
-        IsBeingInteractedWith = overlayPanel != null && overlayPanel.activeSelf;
-
-        if (IsBeingInteractedWith && !IsPlayerInRange())
+        if (PhotonNetwork.IsConnected && photonView != null && !photonView.IsMine)
         {
-            CloseCodePanel();
-            return;
+            savedInput = networkSavedInput;
+            if (hasBeenSolved != networkHasBeenSolved)
+            {
+                hasBeenSolved = networkHasBeenSolved;
+                if (hasBeenSolved && gameManager != null)
+                    gameManager.RegisterCorrectObject(this);
+            }
+            SetObjectColor(networkColor);
         }
 
-        if (IsBeingInteractedWith && Input.GetKeyDown(KeyCode.Escape))
+        if (isOnCooldown)
         {
-            CloseCodePanel();
+            cooldownTimer -= Time.deltaTime;
+            if (cooldownTimer <= 0f)
+            {
+                isOnCooldown = false;
+                if (interactCooldownCanvas != null) interactCooldownCanvas.SetActive(false);
+            }
+            else if (interactCooldownText != null)
+            {
+                interactCooldownText.text = $"{Mathf.CeilToInt(cooldownTimer)}";
+            }
+        }
+
+        IsBeingInteractedWith = overlayPanel != null && overlayPanel.activeSelf && currentActiveIntercom == this;
+
+        if (IsBeingInteractedWith)
+        {
+            if (!IsPlayerInRange())
+            {
+                Debug.Log($"[CodeCheckGame] Player moved away from {name}, closing panel");
+                CloseCodePanel();
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.Escape))
+                CloseCodePanel();
+        }
+
+        if (playerObject != null && !hasBeenSolved && !isOnCooldown)
+        {
+            if (IsPlayerInRange())
+            {
+                if (Input.GetKeyDown(KeyCode.E) && !IsBeingInteractedWith)
+                    OpenCodePanel();
+            }
         }
 
         bool playerStunned = (playerMovement != null && playerMovement.isStunned);
-
         if (checkButton != null)
             checkButton.interactable = !playerStunned;
     }
 
-    private void OnInputChanged(string value)
+    IEnumerator FindLocalPlayerRoutine()
     {
-        savedInput = value;
+        while (playerObject == null)
+        {
+            GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
+            foreach (var p in players)
+            {
+                PhotonView view = p.GetComponent<PhotonView>();
+                if (PhotonNetwork.OfflineMode || view == null || view.IsMine)
+                {
+                    playerObject = p;
+                    playerMovement = p.GetComponent<PlayerMovement>();
+                    hunterController = p.GetComponent<HunterController>();
+                    Debug.Log($"[CodeCheckGame] Local player found: {playerObject.name}");
+                    break;
+                }
+            }
+
+            yield return new WaitForSeconds(0.15f);
+        }
     }
 
-    private void AssignRandomTask()
+    private void OnInputChanged(string value)
     {
-        assignedTask = TaskManager.Instance.GetUniqueRandomTask();
+        if (currentActiveIntercom == this)
+        {
+            savedInput = value;
+            if (PhotonNetwork.IsConnected && photonView != null)
+                photonView.RPC("RPC_SyncInputField", RpcTarget.OthersBuffered, intercomID, value);
+        }
+    }
+
+    [PunRPC]
+    void RPC_SyncInputField(int id, string inputText)
+    {
+        if (id == intercomID)
+        {
+            savedInput = inputText;
+            networkSavedInput = inputText;
+        }
     }
 
     private bool IsPlayerInRange()
     {
         if (playerObject == null || triggeredObject == null) return false;
-
         float distance = Vector2.Distance(playerObject.transform.position, triggeredObject.transform.position);
         return distance <= interactionDistance;
     }
 
     public void OpenCodePanel()
     {
-        if (isOnCooldown || !IsPlayerInRange()) return;
+        Debug.Log($"[CodeCheckGame] OpenCodePanel called on {name}");
+
+        if (currentActiveIntercom != null && currentActiveIntercom != this)
+        {
+            Debug.Log($"[CodeCheckGame] Another intercom is active: {currentActiveIntercom.name}");
+            return;
+        }
+
+        if (isOnCooldown)
+        {
+            Debug.Log($"[CodeCheckGame] {name} is on cooldown");
+            return;
+        }
+
+        if (!IsPlayerInRange())
+        {
+            Debug.Log($"[CodeCheckGame] Player not in range of {name}");
+            return;
+        }
+
+        currentActiveIntercom = this;
 
         if (assignedTask == null)
-            AssignRandomTask();
+            AssignDeterministicTask();
 
         if (codeInputField != null)
             codeInputField.text = string.IsNullOrEmpty(savedInput) ? assignedTask.startingInput : savedInput;
@@ -214,29 +459,42 @@ public class CodeCheckGame : MonoBehaviour
             overlayPanel.SetActive(true);
 
         isTriggered = true;
-        if (playerMovement != null) playerMovement.LockMovement();
 
-        // Start tracking debugging time
+        if (playerMovement != null)
+            playerMovement.LockMovement();
+
         if (gameManager != null)
             gameManager.StartCodeDebugging();
 
-        if (!hasBeenSolved && linkedIntercom != null)
+        // NEW: Reveal minimap icon when ANY survivor interacts (shared across all survivors)
+        if (!hasBeenSolved && !minimapRevealed)
         {
-            linkedIntercom.OnInteractionComplete();
+            RevealOnMinimap();
         }
+
+        Debug.Log($"[CodeCheckGame] Panel opened for {name}");
     }
 
     public void CloseCodePanel()
     {
+        if (currentActiveIntercom != this) return;
+
         if (overlayPanel != null)
             overlayPanel.SetActive(false);
 
         isTriggered = false;
-        if (playerMovement != null) playerMovement.UnlockMovement();
+
+        if (playerMovement != null)
+            playerMovement.UnlockMovement();
+
+        currentActiveIntercom = null;
+
+        Debug.Log($"[CodeCheckGame] Panel closed for {name}");
     }
 
     public void CheckAnswer()
     {
+        if (currentActiveIntercom != this) return;
         if (!isTriggered || assignedTask == null) return;
 
         if (!IsPlayerInRange())
@@ -245,55 +503,33 @@ public class CodeCheckGame : MonoBehaviour
             return;
         }
 
-        string userInput = codeInputField.text.Trim();
+        string userInput = (codeInputField != null) ? codeInputField.text.Trim() : savedInput;
         savedInput = userInput;
 
-        if (userInput == assignedTask.correctAnswer)
+        bool isHunter = (hunterController != null);
+
+        if (PhotonNetwork.IsConnected && photonView != null)
         {
-            SetObjectColor(Color.green);
-
-            // Play correct answer sound
-            if (AudioManager.Instance != null)
-                AudioManager.Instance.PlayCorrectAnswer();
-
-            if (gameManager != null)
-            {
-                gameManager.RegisterCorrectObject(this);
-                gameManager.FinishCodeDebugging(true); // Record successful debugging
-            }
-
-            if (hunter != null)
-                hunter.NotifyCorrectObjectSolved(this);
-
-            if (!hasBeenSolved)
-            {
-                hasBeenSolved = true;
-            }
-
-            lastAnswerWasHunterTampered = false;
-
-            // Show random correct answer image
-            StartCoroutine(ShowCorrectAnswerImage());
+            if (userInput == assignedTask.correctAnswer)
+                photonView.RPC("RPC_MarkAsCorrect", RpcTarget.AllBuffered, intercomID, isHunter);
+            else
+                photonView.RPC("RPC_MarkAsWrong", RpcTarget.AllBuffered, intercomID, lastAnswerWasHunterTampered);
         }
         else
         {
-            SetObjectColor(Color.red);
+            if (userInput == assignedTask.correctAnswer)
+                MarkAsCorrect(isHunter);
+            else
+                MarkAsWrong(lastAnswerWasHunterTampered);
+        }
 
-            // Play wrong answer sound
-            if (AudioManager.Instance != null)
-                AudioManager.Instance.PlayWrongAnswer();
-
-            // Player takes damage only if hunter didn't tamper with the code
-            if (gameManager != null)
-            {
-                gameManager.TakeDamage(lastAnswerWasHunterTampered);
-                gameManager.FinishCodeDebugging(false); // Record failed debugging
-            }
-
-            lastAnswerWasHunterTampered = false;
-
-            // Show wrong answer image
-            StartCoroutine(ShowWrongAnswerImage());
+        if (userInput == assignedTask.correctAnswer)
+        {
+            ShowCorrectAnswerImageLocal();
+        }
+        else
+        {
+            ShowWrongAnswerImageLocal();
         }
 
         CloseCodePanel();
@@ -302,21 +538,95 @@ public class CodeCheckGame : MonoBehaviour
             StartCoroutine(InteractCooldownRoutine());
     }
 
-    private IEnumerator ShowCorrectAnswerImage()
+    [PunRPC]
+    void RPC_MarkAsCorrect(int id, bool isHunter)
     {
-        if (correctAnswerImages.Length > 0)
+        if (id == intercomID) MarkAsCorrect(isHunter);
+    }
+
+    void MarkAsCorrect(bool isHunter = false)
+    {
+        SetObjectColor(Color.green);
+        networkColor = Color.green;
+
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlayCorrectAnswer();
+
+        if (gameManager != null)
         {
-            int randomIndex = Random.Range(0, correctAnswerImages.Length);
-            if (correctAnswerImages[randomIndex] != null)
+            if (isHunter && hasBeenSolved)
             {
-                correctAnswerImages[randomIndex].SetActive(true);
-                yield return new WaitForSeconds(answerImageDisplayTime);
-                correctAnswerImages[randomIndex].SetActive(false);
+                gameManager.UnregisterCorrectObject(this);
+                hasBeenSolved = false;
+                networkHasBeenSolved = false;
             }
+            else if (!isHunter && !hasBeenSolved)
+            {
+                gameManager.RegisterCorrectObject(this);
+                hasBeenSolved = true;
+                networkHasBeenSolved = true;
+            }
+
+            gameManager.FinishCodeDebugging(true);
+        }
+
+        lastAnswerWasHunterTampered = false;
+    }
+
+    [PunRPC]
+    void RPC_MarkAsWrong(int id, bool wasTampered)
+    {
+        if (id == intercomID) MarkAsWrong(wasTampered);
+    }
+
+    void MarkAsWrong(bool wasTampered)
+    {
+        SetObjectColor(Color.red);
+        networkColor = Color.red;
+
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlayWrongAnswer();
+
+        if (gameManager != null)
+        {
+            gameManager.TakeDamage(wasTampered);
+            gameManager.FinishCodeDebugging(false);
+            gameManager.ApplyWrongCodePenalty();
+        }
+
+        lastAnswerWasHunterTampered = false;
+    }
+
+    private void ShowCorrectAnswerImageLocal()
+    {
+        if (correctAnswerImages != null && correctAnswerImages.Length > 0)
+        {
+            StartCoroutine(DisplayCorrectImageCoroutine());
         }
     }
 
-    private IEnumerator ShowWrongAnswerImage()
+    private void ShowWrongAnswerImageLocal()
+    {
+        if (wrongAnswerImage != null)
+        {
+            StartCoroutine(DisplayWrongImageCoroutine());
+        }
+    }
+
+    private IEnumerator DisplayCorrectImageCoroutine()
+    {
+        int randomIndex = Random.Range(0, correctAnswerImages.Length);
+        GameObject selectedImage = correctAnswerImages[randomIndex];
+
+        if (selectedImage != null)
+        {
+            selectedImage.SetActive(true);
+            yield return new WaitForSeconds(answerImageDisplayTime);
+            selectedImage.SetActive(false);
+        }
+    }
+
+    private IEnumerator DisplayWrongImageCoroutine()
     {
         if (wrongAnswerImage != null)
         {
@@ -329,16 +639,16 @@ public class CodeCheckGame : MonoBehaviour
     private IEnumerator InteractCooldownRoutine()
     {
         isOnCooldown = true;
-        float timer = interactCooldown;
+        cooldownTimer = interactCooldown;
 
         if (interactCooldownCanvas != null)
             interactCooldownCanvas.SetActive(true);
 
-        while (timer > 0)
+        while (cooldownTimer > 0f)
         {
             if (interactCooldownText != null)
-                interactCooldownText.text = $"{timer:F0}";
-            timer -= Time.deltaTime;
+                interactCooldownText.text = $"{Mathf.CeilToInt(cooldownTimer)}";
+            cooldownTimer -= Time.deltaTime;
             yield return null;
         }
 
@@ -359,55 +669,67 @@ public class CodeCheckGame : MonoBehaviour
             rend.material.color = color;
     }
 
-    public void SetObjectColor(GameObject obj, Color color)
-    {
-        if (obj == null) return;
-        Renderer rend = obj.GetComponent<Renderer>();
-        if (rend != null)
-            rend.material.color = color;
-    }
-
     public void TamperCode()
     {
-        if (codeInputField != null)
-        {
-            string currentText = codeInputField.text;
-            if (!string.IsNullOrEmpty(currentText))
-            {
-                System.Text.StringBuilder newText = new System.Text.StringBuilder(currentText);
-                int changes = Random.Range(1, 3);
-                for (int i = 0; i < changes; i++)
-                {
-                    int action = Random.Range(0, 3);
-                    int index = Random.Range(0, newText.Length);
+        if (PhotonNetwork.IsConnected && photonView != null)
+            photonView.RPC("RPC_TamperCode", RpcTarget.AllBuffered, intercomID);
+        else
+            ApplyTamper();
+    }
 
-                    if (action == 0)
-                        newText[index] = GetRandomChar();
-                    else if (action == 1)
-                        newText.Insert(index, GetRandomChar());
-                    else if (action == 2 && newText.Length > 1)
-                        newText.Remove(index, 1);
+    [PunRPC]
+    void RPC_TamperCode(int id)
+    {
+        if (id == intercomID) ApplyTamper();
+    }
+
+    void ApplyTamper()
+    {
+        if (currentActiveIntercom == this)
+        {
+            if (codeInputField != null)
+            {
+                string currentText = codeInputField.text;
+                if (!string.IsNullOrEmpty(currentText))
+                {
+                    System.Text.StringBuilder newText = new System.Text.StringBuilder(currentText);
+                    int changes = Random.Range(1, 3);
+                    for (int i = 0; i < changes; i++)
+                    {
+                        int action = Random.Range(0, 3);
+                        int index = Random.Range(0, Mathf.Max(1, newText.Length));
+
+                        if (action == 0)
+                            newText[index % newText.Length] = GetRandomChar();
+                        else if (action == 1)
+                            newText.Insert(index, GetRandomChar());
+                        else if (action == 2 && newText.Length > 1)
+                            newText.Remove(index % newText.Length, 1);
+                    }
+                    codeInputField.text = newText.ToString();
+                    savedInput = codeInputField.text;
+                    networkSavedInput = savedInput;
                 }
-                codeInputField.text = newText.ToString();
             }
         }
 
         SetObjectColor(Color.red);
+        networkColor = Color.red;
 
-        // Play code interrupted sound
         if (AudioManager.Instance != null)
             AudioManager.Instance.PlayCodeInterrupted();
 
-        // Mark that the hunter tampered with this code
         lastAnswerWasHunterTampered = true;
 
-        // Record code interruption
         if (gameManager != null)
             gameManager.RecordCodeInterrupted();
 
         if (hasBeenSolved)
         {
             hasBeenSolved = false;
+            networkHasBeenSolved = false;
+            if (gameManager != null)
+                gameManager.UnregisterCorrectObject(this);
         }
     }
 
@@ -415,5 +737,159 @@ public class CodeCheckGame : MonoBehaviour
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
         return chars[Random.Range(0, chars.Length)];
+    }
+
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            stream.SendNext(savedInput);
+            stream.SendNext(hasBeenSolved);
+            stream.SendNext(networkColor.r);
+            stream.SendNext(networkColor.g);
+            stream.SendNext(networkColor.b);
+            stream.SendNext(minimapRevealed); // NEW: Sync minimap reveal state
+        }
+        else
+        {
+            networkSavedInput = (string)stream.ReceiveNext();
+            networkHasBeenSolved = (bool)stream.ReceiveNext();
+            float r = (float)stream.ReceiveNext();
+            float g = (float)stream.ReceiveNext();
+            float b = (float)stream.ReceiveNext();
+            networkColor = new Color(r, g, b);
+            bool wasRevealed = (bool)stream.ReceiveNext();
+
+            // NEW: Update minimap icon if reveal state changed
+            if (wasRevealed && !minimapRevealed)
+            {
+                RevealOnMinimap();
+            }
+        }
+    }
+
+    public int GetIntercomID() => intercomID;
+    public bool IsSolved() => hasBeenSolved;
+
+    private void AssignDeterministicTask()
+    {
+        if (TaskManager.Instance == null)
+        {
+            Debug.LogWarning($"[CodeCheckGame] {gameObject.name}: TaskManager not found! Using fallback task.");
+            CreateFallbackTask();
+            return;
+        }
+
+        var allTasks = TaskManager.Instance.allTasks;
+        if (allTasks == null || allTasks.Count == 0)
+        {
+            Debug.LogWarning($"[CodeCheckGame] {gameObject.name}: No tasks available in TaskManager! Using fallback.");
+            CreateFallbackTask();
+            return;
+        }
+
+        if (!isTaskAssignmentInitialized)
+        {
+            usedTaskIndices.Clear();
+            isTaskAssignmentInitialized = true;
+            Debug.Log("[CodeCheckGame] Task assignment system initialized - ensuring NO REPEATING tasks");
+        }
+
+        List<int> availableIndices = new List<int>();
+        for (int i = 0; i < allTasks.Count; i++)
+            if (!usedTaskIndices.Contains(i)) availableIndices.Add(i);
+
+        if (availableIndices.Count == 0)
+        {
+            usedTaskIndices.Clear();
+            for (int i = 0; i < allTasks.Count; i++) availableIndices.Add(i);
+        }
+
+        UnityEngine.Random.State original = UnityEngine.Random.state;
+        UnityEngine.Random.InitState(intercomID);
+        int randomIndex = UnityEngine.Random.Range(0, availableIndices.Count);
+        int selectedIndex = availableIndices[randomIndex];
+        UnityEngine.Random.state = original;
+
+        usedTaskIndices.Add(selectedIndex);
+        assignedTask = allTasks[selectedIndex];
+
+        Debug.Log($"[CodeCheckGame] {gameObject.name}: Assigned task #{selectedIndex} - '{assignedTask.instruction}'");
+    }
+
+    private void CreateFallbackTask()
+    {
+        assignedTask = new TaskManager.CodeTask();
+        assignedTask.instruction = "Type 'run' to execute the program";
+        assignedTask.correctAnswer = "run";
+        assignedTask.startingInput = "";
+    }
+
+    public static void ResetTaskAssignment()
+    {
+        usedTaskIndices.Clear();
+        isTaskAssignmentInitialized = false;
+        currentActiveIntercom = null;
+        Debug.Log("[CodeCheckGame] Task assignment system reset for new game");
+    }
+
+    // NEW: Reveal minimap icon for ALL survivors when ANY survivor interacts
+    public void RevealOnMinimap()
+    {
+        if (minimapRevealed) return; // Already revealed
+
+        minimapRevealed = true;
+
+        // For survivors: reveal the icon
+        if (gameManager != null && gameManager.localPlayerIsSurvivor)
+        {
+            if (minimapIcon != null)
+            {
+                minimapIcon.SetActive(true);
+                Debug.Log($"[CodeCheckGame] {name}: Minimap icon revealed for survivor.");
+            }
+        }
+
+        // Sync reveal state across network
+        if (PhotonNetwork.IsConnected && photonView != null)
+        {
+            photonView.RPC("RPC_RevealMinimapIcon", RpcTarget.AllBuffered, intercomID);
+        }
+    }
+
+    [PunRPC]
+    void RPC_RevealMinimapIcon(int id)
+    {
+        if (id == intercomID && !minimapRevealed)
+        {
+            minimapRevealed = true;
+
+            // Only reveal for survivors
+            if (gameManager != null && gameManager.localPlayerIsSurvivor)
+            {
+                if (minimapIcon != null)
+                {
+                    minimapIcon.SetActive(true);
+                    Debug.Log($"[CodeCheckGame] {name}: Minimap icon revealed via RPC for survivor.");
+                }
+            }
+        }
+    }
+
+    public void SetInteractionState(bool active)
+    {
+        IsBeingInteractedWith = active;
+        if (!active) triggeredObject = null;
+    }
+
+    public void SetTriggeredObject(GameObject obj)
+    {
+        triggeredObject = obj;
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireCube(transform.position, Vector3.one * 0.5f);
     }
 }

@@ -68,6 +68,12 @@ public class CameraFlow : MonoBehaviour
         Debug.Log($"[CameraFlow] Now following: {target.name}");
     }
 
+
+    public Transform GetTarget()
+    {
+        return target;
+    }
+
     public void SetBoundsFromMultipleRenderers(Renderer[] renderers)
     {
         if (renderers == null || renderers.Length == 0) return;
@@ -84,10 +90,6 @@ public class CameraFlow : MonoBehaviour
         Debug.Log($"[CameraFlow] Bounds set: min {minBounds}, max {maxBounds}");
     }
 
-    /// <summary>
-    /// Continuously tries to find the local player object after scene load or network spawn.
-    /// Works for both offline and Photon multiplayer.
-    /// </summary>
     IEnumerator FindLocalPlayerTarget()
     {
         if (searchingForTarget) yield break;

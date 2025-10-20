@@ -1,6 +1,9 @@
-using Firebase.Auth;
+﻿using Firebase.Auth;
+using Firebase.Database;
+using Firebase.Extensions;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
 
 public class UserInfoDisplay : MonoBehaviour
 {
@@ -9,17 +12,25 @@ public class UserInfoDisplay : MonoBehaviour
     public bool showUserId = true;
     public bool showEmail = false;
 
-    [Header("UI Text References")]
+    [Header("IS THIS THE CURRENT PLAYER'S DISPLAY?")]
+    public bool isCurrentPlayerDisplay = false;
+
+    [Header("UI Text References (Optional)")]
     public Text displayNameText;
     public Text userIdText;
     public Text emailText;
 
-    [Header("Profile Icon")]
-    public Image profileIcon;
-    public Sprite defaultProfileSprite; // Assign a default uniform icon in inspector
+    [Header("XP & Level Display (Optional)")]
+    public Text levelText;
+    public Text xpText;
+    public Slider xpProgressBar;
 
-    [Header("Host Indicator")]
-    public GameObject hostIndicator; // Image/Icon showing "HOST"
+    [Header("Profile Icon (Optional)")]
+    public Image profileIcon;
+    public Sprite defaultProfileSprite;
+
+    [Header("Host Indicator (Optional)")]
+    public GameObject hostIndicator;
 
     [Header("Optional: Custom Labels")]
     public string displayNamePrefix = "";
@@ -30,69 +41,227 @@ public class UserInfoDisplay : MonoBehaviour
     public string guestDisplayName = "Guest";
 
     private FirebaseAuth auth;
+    private DatabaseReference database;
+    private bool isFirebaseReady = false;
+
+    private string assignedPlayerNickName = "";
 
     void Start()
     {
-        auth = FirebaseAuth.DefaultInstance;
+        Debug.Log($"[UserInfoDisplay] START - isCurrentPlayerDisplay={isCurrentPlayerDisplay}, displayNameText={displayNameText}");
 
-        // Hide host indicator by default
         if (hostIndicator != null)
             hostIndicator.SetActive(false);
 
-        UpdateUserInfo();
+        StartCoroutine(WaitForFirebaseAndUpdate());
     }
 
     void OnEnable()
     {
-        UpdateUserInfo();
+        Debug.Log($"[UserInfoDisplay] OnEnable called");
+        if (isFirebaseReady)
+        {
+            SafeUpdateUserInfo();
+        }
+        else
+        {
+            StartCoroutine(WaitForFirebaseAndUpdate());
+        }
+    }
+
+    IEnumerator WaitForFirebaseAndUpdate()
+    {
+        while (FirebaseInitializer.Instance == null || !FirebaseInitializer.Instance.IsFirebaseReady())
+        {
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        try
+        {
+            auth = FirebaseAuth.DefaultInstance;
+            database = FirebaseDatabase.DefaultInstance?.RootReference;
+            isFirebaseReady = true;
+            Debug.Log("[UserInfoDisplay] Firebase ready");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[UserInfoDisplay] Firebase initialization failed: {ex.Message}");
+            yield break;
+        }
+
+        SafeUpdateUserInfo();
+    }
+
+    public void SetPlayerInfo(string nickName)
+    {
+        assignedPlayerNickName = nickName;
+        Debug.Log($"[UserInfoDisplay.SetPlayerInfo] Called with: '{nickName}', isCurrentPlayerDisplay={isCurrentPlayerDisplay}, displayNameText={displayNameText}");
+
+        if (!isCurrentPlayerDisplay && displayNameText != null)
+        {
+            // If nickname is empty or null, use the guest display name
+            string displayName = string.IsNullOrEmpty(nickName) ? guestDisplayName : nickName;
+            displayNameText.text = displayNamePrefix + displayName;
+            Debug.Log($"[UserInfoDisplay.SetPlayerInfo] SUCCESS - Set text to: '{displayNamePrefix + displayName}'");
+        }
+        else
+        {
+            Debug.LogWarning($"[UserInfoDisplay.SetPlayerInfo] SKIPPED - isCurrentPlayerDisplay={isCurrentPlayerDisplay}, displayNameText null={displayNameText == null}");
+        }
+    }
+
+    public void SafeUpdateUserInfo()
+    {
+        try
+        {
+            UpdateUserInfo();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[UserInfoDisplay] UpdateUserInfo failed: {ex.Message}");
+        }
     }
 
     public void UpdateUserInfo()
     {
-        if (auth == null)
-            auth = FirebaseAuth.DefaultInstance;
+        Debug.Log($"[UserInfoDisplay.UpdateUserInfo] Called - isCurrentPlayerDisplay={isCurrentPlayerDisplay}");
 
-        FirebaseUser user = auth.CurrentUser;
+        if (!isFirebaseReady || auth == null)
+        {
+            if (isCurrentPlayerDisplay)
+                SetGuestUI();
+            return;
+        }
+
+        if (!isCurrentPlayerDisplay)
+        {
+            Debug.Log("[UserInfoDisplay.UpdateUserInfo] Not current player - returning early");
+            return;
+        }
+
+        FirebaseUser user = null;
+        try
+        {
+            user = auth.CurrentUser;
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[UserInfoDisplay] Failed to get current user: {ex.Message}");
+            SetGuestUI();
+            return;
+        }
 
         if (user != null)
         {
-            // Update Display Name
             if (showDisplayName && displayNameText != null)
             {
                 string name = string.IsNullOrEmpty(user.DisplayName) ? guestDisplayName : user.DisplayName;
                 displayNameText.text = displayNamePrefix + name;
             }
 
-            // Update User ID
             if (showUserId && userIdText != null)
             {
                 userIdText.text = userIdPrefix + user.UserId;
             }
 
-            // Update Email
             if (showEmail && emailText != null)
             {
                 string email = string.IsNullOrEmpty(user.Email) ? "No email" : user.Email;
                 emailText.text = emailPrefix + email;
             }
 
-            // Set Profile Icon
-            if (profileIcon != null && defaultProfileSprite != null)
+            if (profileIcon != null)
             {
-                profileIcon.sprite = defaultProfileSprite;
+                profileIcon.sprite = defaultProfileSprite ?? profileIcon.sprite;
             }
+
+            if (database != null)
+                LoadUserProgress(user.UserId);
+            else
+                SetDefaultProgress();
         }
         else
         {
-            if (displayNameText != null)
-                displayNameText.text = "Not logged in";
-
-            if (userIdText != null)
-                userIdText.text = "";
-
-            if (emailText != null)
-                emailText.text = "";
+            SetGuestUI();
         }
+    }
+
+    void SetGuestUI()
+    {
+        if (displayNameText != null)
+            displayNameText.text = "Not logged in";
+
+        if (userIdText != null)
+            userIdText.text = "";
+
+        if (emailText != null)
+            emailText.text = "";
+
+        SetDefaultProgress();
+    }
+
+    void SetDefaultProgress()
+    {
+        if (levelText != null)
+            levelText.text = "Level 1";
+
+        if (xpText != null)
+            xpText.text = "0/50 XP";
+
+        if (xpProgressBar != null)
+            xpProgressBar.value = 0;
+    }
+
+    private void LoadUserProgress(string userId)
+    {
+        if (database == null || string.IsNullOrEmpty(userId))
+        {
+            Debug.LogWarning("[UserInfoDisplay] Database or userId is null. Using default progress.");
+            SetDefaultProgress();
+            return;
+        }
+
+        database.Child("users").Child(userId).Child("progress").GetValueAsync().ContinueWithOnMainThread(task =>
+        {
+            if (!task.IsCompleted || task.Result == null || !task.Result.Exists)
+            {
+                SetDefaultProgress();
+                return;
+            }
+
+            DataSnapshot snapshot = task.Result;
+
+            int level = 1;
+            int xp = 0;
+            int xpPerLevel = 50;
+
+            try
+            {
+                if (snapshot.Child("level").Value != null)
+                    int.TryParse(snapshot.Child("level").Value.ToString(), out level);
+                if (snapshot.Child("xp").Value != null)
+                    int.TryParse(snapshot.Child("xp").Value.ToString(), out xp);
+
+                if (UserProgressManager.Instance != null)
+                    xpPerLevel = UserProgressManager.Instance.xpPerLevel;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[UserInfoDisplay] Failed parsing XP data: {ex.Message}");
+            }
+
+            if (levelText != null)
+                levelText.text = $"Level {level}";
+
+            if (xpText != null)
+                xpText.text = $"{xp}/{xpPerLevel} XP";
+
+            if (xpProgressBar != null)
+            {
+                xpProgressBar.maxValue = xpPerLevel;
+                xpProgressBar.value = xp;
+            }
+        });
     }
 
     public void SetHostStatus(bool isHost)
@@ -103,10 +272,16 @@ public class UserInfoDisplay : MonoBehaviour
 
     public string GetDisplayName()
     {
-        if (auth != null && auth.CurrentUser != null)
+        if (!string.IsNullOrEmpty(assignedPlayerNickName))
+            return assignedPlayerNickName;
+
+        try
         {
-            return string.IsNullOrEmpty(auth.CurrentUser.DisplayName) ? guestDisplayName : auth.CurrentUser.DisplayName;
+            if (isFirebaseReady && auth != null && auth.CurrentUser != null)
+                return string.IsNullOrEmpty(auth.CurrentUser.DisplayName) ? guestDisplayName : auth.CurrentUser.DisplayName;
         }
+        catch { }
+
         return guestDisplayName;
     }
 }

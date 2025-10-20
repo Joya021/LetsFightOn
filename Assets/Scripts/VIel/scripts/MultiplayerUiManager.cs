@@ -1,52 +1,32 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections.Generic;
-using System.Collections;
+using Photon.Pun;
+using Photon.Realtime;
 
-
-public class MultiplayerUIManager : MonoBehaviour
+public class MultiplayerUIManager : MonoBehaviourPunCallbacks
 {
-    [Header("Player Icons Panel")]
-    public GameObject playerIconsPanel;
-    public GameObject playerIconPrefab; // Prefab for individual player UI
-
-    [Header("Status Indicator Images")]
-    public Sprite aliveIndicatorSprite;
-    public Sprite deadIndicatorSprite;
-
-    [Header("Quick Chat Settings")]
-    public float quickChatDisplayDuration = 3f;
-    public GameObject[] quickChatImages; // Array of quick chat images to choose from
-
-    [Header("Character Icons")]
-    public Sprite[] survivorCharacterIcons; // 4 survivor character icons
-    public Sprite[] hunterCharacterIcons;   // 3 hunter character icons
-
-    [Header("Layout Settings")]
-    public int maxPlayersPerRow = 4;
-    public float iconSpacing = 10f;
-
-    // Player management
-    private Dictionary<int, PlayerUIData> players = new Dictionary<int, PlayerUIData>();
-    private List<Coroutine> activeQuickChatCoroutines = new List<Coroutine>();
-
     public static MultiplayerUIManager Instance;
 
-    [System.Serializable]
-    public class PlayerUIData
-    {
-        public string playerName;
-        public int playerId;
-        public bool isSurvivor; // true = survivor, false = hunter
-        public bool isAlive = true;
-        public GameObject playerIconObject; // The UI GameObject containing all player UI elements
-        public Image playerIcon; // The character icon
-        public Image statusIndicator; // Alive/Dead indicator
-        public Text playerNameText; // Player name display
-        public GameObject quickChatIndicator; // Shows when player uses quick chat
-        public Image quickChatImage; // The actual quick chat image
-    }
-    void Awake()
+    [Header("Player Status UI")]
+    public GameObject playerStatusPanel;
+    public Transform playerListContainer;
+    public GameObject playerStatusPrefab;
+
+    [Header("Quick Chat Settings")]
+    public GameObject[] quickChatImages;
+    public float quickChatDisplayDuration = 3f;
+
+    // Track player UI elements
+    private Dictionary<int, PlayerStatusUI> playerStatusElements = new Dictionary<int, PlayerStatusUI>();
+
+    // Track which players are survivors (for quick chat filtering)
+    private HashSet<int> survivorPlayerIds = new HashSet<int>();
+
+    private bool isInitialized = false;
+
+    private void Awake()
     {
         if (Instance == null)
         {
@@ -55,211 +35,268 @@ public class MultiplayerUIManager : MonoBehaviour
         else
         {
             Destroy(gameObject);
+            return;
         }
     }
 
-    void Start()
+    private void Start()
     {
-        if (playerIconsPanel != null)
-            playerIconsPanel.SetActive(true);
-    }
-
-    #region Player Management
-
-    public void AddPlayer(int playerId, string playerName, bool isSurvivor, int characterIndex)
-    {
-        if (players.ContainsKey(playerId))
+        // Validate references
+        if (!ValidateReferences())
         {
-            Debug.LogWarning($"Player {playerId} already exists!");
+            Debug.LogError("[MultiplayerUIManager] CRITICAL: Missing references! Please assign in Inspector.");
+            enabled = false;
             return;
         }
 
-        // Create player UI
-        GameObject playerIconObj = Instantiate(playerIconPrefab, playerIconsPanel.transform);
+        isInitialized = true;
 
-        PlayerUIData playerData = new PlayerUIData
+        if (playerStatusPanel != null)
         {
-            playerId = playerId,
-            playerName = playerName,
-            isSurvivor = isSurvivor,
-            isAlive = true,
-            playerIconObject = playerIconObj
-        };
+            playerStatusPanel.SetActive(true);
+        }
 
-        // Get UI components from the instantiated prefab
-        playerData.playerIcon = playerIconObj.transform.Find("PlayerIcon").GetComponent<Image>();
-        playerData.statusIndicator = playerIconObj.transform.Find("StatusIndicator").GetComponent<Image>();
-        playerData.playerNameText = playerIconObj.transform.Find("PlayerName").GetComponent<Text>();
-        playerData.quickChatIndicator = playerIconObj.transform.Find("QuickChatIndicator").gameObject;
-        playerData.quickChatImage = playerIconObj.transform.Find("QuickChatIndicator/QuickChatImage").GetComponent<Image>();
+        // Initialize for all players in room
+        if (PhotonNetwork.IsConnected && PhotonNetwork.InRoom)
+        {
+            foreach (Player player in PhotonNetwork.PlayerList)
+            {
+                AddPlayerFromPhoton(player);
+            }
+        }
+    }
 
-        // Set up player icon
-        SetPlayerCharacterIcon(playerData, characterIndex);
+    private bool ValidateReferences()
+    {
+        bool isValid = true;
 
-        // Set up status indicator
-        if (playerData.statusIndicator != null)
-            playerData.statusIndicator.sprite = aliveIndicatorSprite;
+        if (playerStatusPanel == null)
+        {
+            Debug.LogError("[MultiplayerUIManager] PlayerStatusPanel is NOT assigned! Please assign it in the Inspector.");
+            isValid = false;
+        }
 
-        // Set up player name
-        if (playerData.playerNameText != null)
-            playerData.playerNameText.text = playerName;
+        if (playerListContainer == null)
+        {
+            Debug.LogError("[MultiplayerUIManager] PlayerListContainer is NOT assigned! Please assign it in the Inspector.");
+            isValid = false;
+        }
 
-        // Hide quick chat indicator initially
-        if (playerData.quickChatIndicator != null)
-            playerData.quickChatIndicator.SetActive(false);
+        if (playerStatusPrefab == null)
+        {
+            Debug.LogError("[MultiplayerUIManager] PlayerStatusPrefab is NOT assigned! Please assign it in the Inspector.");
+            isValid = false;
+        }
 
-        players.Add(playerId, playerData);
-        UpdatePlayerIconsLayout();
+        if (quickChatImages == null || quickChatImages.Length == 0)
+        {
+            Debug.LogWarning("[MultiplayerUIManager] QuickChatImages array is empty. Quick chat will not work.");
+        }
 
-        Debug.Log($"Added player: {playerName} (ID: {playerId}, Survivor: {isSurvivor})");
+        if (isValid)
+        {
+            Debug.Log("[MultiplayerUIManager] All references validated successfully!");
+        }
+
+        return isValid;
+    }
+
+    public override void OnPlayerEnteredRoom(Player newPlayer)
+    {
+        if (!isInitialized) return;
+        AddPlayerFromPhoton(newPlayer);
+    }
+
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        if (!isInitialized) return;
+        RemovePlayer(otherPlayer.ActorNumber);
+    }
+
+    private void AddPlayerFromPhoton(Player player)
+    {
+        if (!isInitialized)
+        {
+            Debug.LogWarning("[MultiplayerUIManager] Not initialized, skipping AddPlayerFromPhoton");
+            return;
+        }
+
+        bool isSurvivor = true;
+        int characterIndex = 0;
+
+        if (player.CustomProperties.ContainsKey("PlayerRole"))
+        {
+            isSurvivor = !(bool)player.CustomProperties["PlayerRole"];
+        }
+
+        if (player.CustomProperties.ContainsKey("CharacterIndex"))
+        {
+            characterIndex = (int)player.CustomProperties["CharacterIndex"];
+        }
+
+        AddPlayer(player.ActorNumber, player.NickName, isSurvivor, characterIndex);
+    }
+
+    public void AddPlayer(int playerId, string playerName, bool isSurvivor, int characterIndex)
+    {
+        if (!isInitialized)
+        {
+            Debug.LogWarning("[MultiplayerUIManager] Cannot add player - not initialized!");
+            return;
+        }
+
+        if (playerStatusElements.ContainsKey(playerId))
+        {
+            Debug.LogWarning($"[MultiplayerUIManager] Player {playerId} already exists in UI");
+            return;
+        }
+
+        if (playerStatusPrefab == null)
+        {
+            Debug.LogError("[MultiplayerUIManager] PlayerStatusPrefab is NULL! Cannot instantiate.");
+            return;
+        }
+
+        if (playerListContainer == null)
+        {
+            Debug.LogError("[MultiplayerUIManager] PlayerListContainer is NULL! Cannot add player.");
+            return;
+        }
+
+        GameObject statusObj = Instantiate(playerStatusPrefab, playerListContainer);
+        PlayerStatusUI statusUI = statusObj.GetComponent<PlayerStatusUI>();
+
+        if (statusUI != null)
+        {
+            statusUI.Initialize(playerId, playerName, isSurvivor, characterIndex);
+            playerStatusElements[playerId] = statusUI;
+
+            if (isSurvivor)
+            {
+                survivorPlayerIds.Add(playerId);
+            }
+
+            Debug.Log($"[MultiplayerUIManager] Added player {playerName} (ID: {playerId}) to UI. Survivor: {isSurvivor}");
+        }
+        else
+        {
+            Debug.LogError("[MultiplayerUIManager] PlayerStatusUI component not found on prefab!");
+            Destroy(statusObj);
+        }
     }
 
     public void RemovePlayer(int playerId)
     {
-        if (players.ContainsKey(playerId))
-        {
-            if (players[playerId].playerIconObject != null)
-                Destroy(players[playerId].playerIconObject);
+        if (!isInitialized) return;
 
-            players.Remove(playerId);
-            UpdatePlayerIconsLayout();
+        if (playerStatusElements.ContainsKey(playerId))
+        {
+            Destroy(playerStatusElements[playerId].gameObject);
+            playerStatusElements.Remove(playerId);
+            survivorPlayerIds.Remove(playerId);
+            Debug.Log($"[MultiplayerUIManager] Removed player {playerId} from UI");
         }
     }
 
     public void SetPlayerAliveStatus(int playerId, bool isAlive)
     {
-        if (players.ContainsKey(playerId))
-        {
-            players[playerId].isAlive = isAlive;
+        if (!isInitialized) return;
 
-            if (players[playerId].statusIndicator != null)
-            {
-                players[playerId].statusIndicator.sprite = isAlive ? aliveIndicatorSprite : deadIndicatorSprite;
-            }
+        if (playerStatusElements.ContainsKey(playerId))
+        {
+            playerStatusElements[playerId].SetAliveStatus(isAlive);
         }
     }
 
-    #endregion
-
-    #region Quick Chat System
-
-    public void ShowPlayerQuickChat(int playerId, int quickChatIndex)
+    public void ShowPlayerQuickChat(int playerId, int messageIndex)
     {
-        if (!players.ContainsKey(playerId) || quickChatIndex < 0 || quickChatIndex >= quickChatImages.Length)
+        if (!isInitialized)
+        {
+            Debug.LogWarning("[MultiplayerUIManager] Cannot show quick chat - not initialized!");
             return;
-
-        PlayerUIData playerData = players[playerId];
-
-        if (playerData.quickChatIndicator != null && playerData.quickChatImage != null)
-        {
-            // Stop any existing quick chat coroutine for this player
-            StopPlayerQuickChat(playerId);
-
-            // Set the quick chat image
-            playerData.quickChatImage.sprite = quickChatImages[quickChatIndex].GetComponent<Image>().sprite;
-
-            // Start the quick chat display coroutine
-            Coroutine quickChatCoroutine = StartCoroutine(ShowQuickChatCoroutine(playerId));
-            activeQuickChatCoroutines.Add(quickChatCoroutine);
         }
-    }
 
-    private void StopPlayerQuickChat(int playerId)
-    {
-        if (players.ContainsKey(playerId))
+        // Only survivors should see survivor quick chats
+        if (!survivorPlayerIds.Contains(playerId))
         {
-            PlayerUIData playerData = players[playerId];
-            if (playerData.quickChatIndicator != null)
-                playerData.quickChatIndicator.SetActive(false);
+            Debug.Log($"[MultiplayerUIManager] Player {playerId} is not a survivor, quick chat not shown");
+            return;
         }
-    }
 
-    private IEnumerator ShowQuickChatCoroutine(int playerId)
-    {
-        if (!players.ContainsKey(playerId))
-            yield break;
-
-        PlayerUIData playerData = players[playerId];
-
-        // Show quick chat indicator
-        if (playerData.quickChatIndicator != null)
-            playerData.quickChatIndicator.SetActive(true);
-
-        // Wait for duration
-        yield return new WaitForSeconds(quickChatDisplayDuration);
-
-        // Hide quick chat indicator
-        if (playerData.quickChatIndicator != null)
-            playerData.quickChatIndicator.SetActive(false);
-    }
-
-    #endregion
-
-    #region Helper Methods
-
-    private void SetPlayerCharacterIcon(PlayerUIData playerData, int characterIndex)
-    {
-        if (playerData.playerIcon == null) return;
-
-        Sprite[] characterIcons = playerData.isSurvivor ? survivorCharacterIcons : hunterCharacterIcons;
-
-        if (characterIndex >= 0 && characterIndex < characterIcons.Length)
+        // Check if PhotonView is available
+        PhotonView pv = GetComponent<PhotonView>();
+        if (pv == null)
         {
-            playerData.playerIcon.sprite = characterIcons[characterIndex];
+            Debug.LogError("[MultiplayerUIManager] PhotonView not found! Please add PhotonView component.");
+            return;
+        }
+
+        // Send RPC to all clients
+        pv.RPC("RPC_ShowQuickChat", RpcTarget.All, playerId, messageIndex);
+    }
+
+    [PunRPC]
+    void RPC_ShowQuickChat(int senderId, int messageIndex)
+    {
+        if (!isInitialized) return;
+
+        // Check if local player is a survivor
+        bool localPlayerIsSurvivor = true;
+        if (PhotonNetwork.LocalPlayer.CustomProperties.ContainsKey("PlayerRole"))
+        {
+            localPlayerIsSurvivor = !(bool)PhotonNetwork.LocalPlayer.CustomProperties["PlayerRole"];
+        }
+
+        // Only show to survivors
+        if (!localPlayerIsSurvivor)
+        {
+            Debug.Log("[MultiplayerUIManager] Local player is Hunter, not showing survivor quick chat");
+            return;
+        }
+
+        // Validate quick chat images
+        if (quickChatImages == null || quickChatImages.Length == 0)
+        {
+            Debug.LogWarning("[MultiplayerUIManager] Quick chat images array is empty!");
+            return;
+        }
+
+        // Show the quick chat image
+        if (messageIndex >= 0 && messageIndex < quickChatImages.Length)
+        {
+            if (quickChatImages[messageIndex] != null)
+            {
+                StartCoroutine(ShowQuickChatCoroutine(messageIndex));
+                Debug.Log($"[MultiplayerUIManager] Showing quick chat message {messageIndex} from player {senderId}");
+            }
+            else
+            {
+                Debug.LogWarning($"[MultiplayerUIManager] Quick chat image at index {messageIndex} is NULL!");
+            }
         }
         else
         {
-            Debug.LogWarning($"Invalid character index {characterIndex} for player {playerData.playerId}");
+            Debug.LogWarning($"[MultiplayerUIManager] Invalid quick chat index: {messageIndex}");
         }
     }
 
-    private void UpdatePlayerIconsLayout()
+    private IEnumerator ShowQuickChatCoroutine(int messageIndex)
     {
-        // Simple layout update - you can make this more sophisticated
-        int playerCount = 0;
-        foreach (var player in players.Values)
+        if (quickChatImages[messageIndex] != null)
         {
-            if (player.playerIconObject != null)
-            {
-                // Position based on player count
-                RectTransform rt = player.playerIconObject.GetComponent<RectTransform>();
-                if (rt != null)
-                {
-                    int row = playerCount / maxPlayersPerRow;
-                    int col = playerCount % maxPlayersPerRow;
-
-                    float x = col * (rt.sizeDelta.x + iconSpacing);
-                    float y = -row * (rt.sizeDelta.y + iconSpacing);
-
-                    rt.anchoredPosition = new Vector2(x, y);
-                }
-                playerCount++;
-            }
+            quickChatImages[messageIndex].SetActive(true);
+            yield return new WaitForSeconds(quickChatDisplayDuration);
+            quickChatImages[messageIndex].SetActive(false);
         }
     }
 
-    public bool IsPlayerAlive(int playerId)
+    public void UpdatePlayerHealth(int playerId, int currentHP, int maxHP)
     {
-        if (players.ContainsKey(playerId))
-            return players[playerId].isAlive;
-        return false;
-    }
+        if (!isInitialized) return;
 
-    public int GetPlayerCount()
-    {
-        return players.Count;
-    }
-
-    public int GetAlivePlayerCount()
-    {
-        int count = 0;
-        foreach (var player in players.Values)
+        if (playerStatusElements.ContainsKey(playerId))
         {
-            if (player.isAlive)
-                count++;
+            playerStatusElements[playerId].UpdateHealth(currentHP, maxHP);
         }
-        return count;
     }
-
-    #endregion
 }

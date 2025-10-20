@@ -1,0 +1,92 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6994428122301550124
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5771892525951117700}
+  - component: {fileID: 247491339991241312}
+  m_Layer: 0
+  m_Name: TaskManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5771892525951117700
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6994428122301550124}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -5.1629686, y: -0.18433842, z: 0.029335035}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &247491339991241312
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6994428122301550124}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1791c8fd35c57842bef09a12eaf3a0d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  allTasks:
+  - instruction: Fix the bug so the program prints the integer 7.
+    correctAnswer: print(7)
+    startingInput: prnt(7)
+  - instruction: Fix the bug so the program prints "Hello!"
+    correctAnswer: print("Hello!")
+    startingInput: rit(Helo
+  - instruction: Print "the integer 12345".
+    correctAnswer: print("the integer 12345")
+    startingInput: print(5)
+  - instruction: Make this format correct. Separate words with underscores!
+    correctAnswer: feed_the_turtle()
+    startingInput: feedthe_turtle()
+  - instruction: Make this format correct. Separate words with underscores!
+    correctAnswer: i_miss_you()
+    startingInput: i_missyou()
+  - instruction: This function is not working. Check the syntax!
+    correctAnswer: feed_the_dog()
+    startingInput: feed_the_dog(
+  - instruction: Store your friend's phone numbe correctly!
+    correctAnswer: phone = '09171234567'
+    startingInput: phone = '0917_1234_567'
+  - instruction: Print the integer -50
+    correctAnswer: print(-50)
+    startingInput: +50
+  - instruction: This function is not working. Make the syntax correct!
+    correctAnswer: welcome_message()
+    startingInput: welcomemessage_()
+  - instruction: This function is not working. Make the syntax correct!
+    correctAnswer: print(greeting)
+    startingInput: print_(greeting)
+  - instruction: This function is not working. Make the syntax correct!
+    correctAnswer: print(goodmorning)
+    startingInput: '"print(goodmorning)"'
+  - instruction: Assign the value 5 to y.
+    correctAnswer: y = 5
+    startingInput: x = 5
+  - instruction: Assign the value 5 to x.
+    correctAnswer: x = 5
+    startingInput: y = 5
+  - instruction: Assign the value 123 to abc.
+    correctAnswer: abc = 123
+    startingInput: abc = 1
+  - instruction: Make this format correct. Separate words with underscores!
+    correctAnswer: my_function()
+    startingInput: _my_function()_
