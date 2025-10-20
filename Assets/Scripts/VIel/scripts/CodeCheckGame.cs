@@ -65,7 +65,7 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
     [Header("Minimap Integration")]
     public GameObject minimapIcon;
     private MiniMap miniMap;
-    private bool minimapRevealed = false; // NEW: Track if minimap icon has been revealed
+    private bool minimapRevealed = false; 
 
     void Awake()
     {
@@ -230,11 +230,11 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
 
     IEnumerator RegisterWithGameManagerRoutine()
     {
-        // CRITICAL FIX: Wait a bit before starting registration attempts
+       
         yield return new WaitForSeconds(0.5f);
 
         int attempts = 0;
-        int maxAttempts = 30; // Increased from 20
+        int maxAttempts = 20;
 
         while (!hasRegistered && attempts < maxAttempts)
         {
@@ -248,7 +248,7 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
 
             if (gameManager != null)
             {
-                // CRITICAL: Verify GameManager's allCodeGames list exists
+               
                 if (gameManager.allCodeGames != null)
                 {
                     gameManager.RegisterCodeCheckGame(this);
@@ -266,14 +266,14 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
                 Debug.LogWarning($"[CodeCheckGame] {gameObject.name}: GameManager not found (attempt {attempts})");
             }
 
-            // Wait longer between attempts
+          
             yield return new WaitForSeconds(0.3f);
         }
 
         if (!hasRegistered)
         {
             
-            Debug.LogError($"[CodeCheckGame] ❌ {gameObject.name} FAILED to register after {maxAttempts} attempts!");
+            Debug.LogError($"[CodeCheckGame]  {gameObject.name} FAILED to register after {maxAttempts} attempts!");
 
             yield return new WaitForSeconds(1f);
 
@@ -284,7 +284,7 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
             {
                 gameManager.RegisterCodeCheckGame(this);
                 hasRegistered = true;
-                Debug.Log($"[CodeCheckGame] ✓ {gameObject.name} registered on FINAL attempt!");
+                Debug.Log($"[CodeCheckGame]  {gameObject.name} registered on FINAL attempt!");
             }
         }
     }
@@ -293,16 +293,16 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
     {
         if (!hasRegistered)
         {
-            // Try immediate registration first
+         
             if (gameManager != null && gameManager.allCodeGames != null)
             {
                 gameManager.RegisterCodeCheckGame(this);
                 hasRegistered = true;
-                Debug.Log($"[CodeCheckGame] ✓ {gameObject.name} registered immediately in OnEnable");
+                Debug.Log($"[CodeCheckGame] {gameObject.name} registered immediately in OnEnable");
             }
             else
             {
-                // Fall back to coroutine
+              
                 StartCoroutine(RegisterWithGameManagerRoutine());
             }
         }
@@ -748,7 +748,7 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
             stream.SendNext(networkColor.r);
             stream.SendNext(networkColor.g);
             stream.SendNext(networkColor.b);
-            stream.SendNext(minimapRevealed); // NEW: Sync minimap reveal state
+            stream.SendNext(minimapRevealed);
         }
         else
         {
@@ -760,7 +760,7 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
             networkColor = new Color(r, g, b);
             bool wasRevealed = (bool)stream.ReceiveNext();
 
-            // NEW: Update minimap icon if reveal state changed
+           
             if (wasRevealed && !minimapRevealed)
             {
                 RevealOnMinimap();
@@ -776,7 +776,7 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
         if (TaskManager.Instance == null)
         {
             Debug.LogWarning($"[CodeCheckGame] {gameObject.name}: TaskManager not found! Using fallback task.");
-            CreateFallbackTask();
+            //CreateFallbackTask();
             return;
         }
 
@@ -784,7 +784,7 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
         if (allTasks == null || allTasks.Count == 0)
         {
             Debug.LogWarning($"[CodeCheckGame] {gameObject.name}: No tasks available in TaskManager! Using fallback.");
-            CreateFallbackTask();
+            //CreateFallbackTask();
             return;
         }
 
@@ -817,23 +817,9 @@ public class CodeCheckGame : MonoBehaviourPunCallbacks, IPunObservable
         Debug.Log($"[CodeCheckGame] {gameObject.name}: Assigned task #{selectedIndex} - '{assignedTask.instruction}'");
     }
 
-    private void CreateFallbackTask()
-    {
-        assignedTask = new TaskManager.CodeTask();
-        assignedTask.instruction = "Type 'run' to execute the program";
-        assignedTask.correctAnswer = "run";
-        assignedTask.startingInput = "";
-    }
+ 
 
-    public static void ResetTaskAssignment()
-    {
-        usedTaskIndices.Clear();
-        isTaskAssignmentInitialized = false;
-        currentActiveIntercom = null;
-        Debug.Log("[CodeCheckGame] Task assignment system reset for new game");
-    }
-
-    // NEW: Reveal minimap icon for ALL survivors when ANY survivor interacts
+   
     public void RevealOnMinimap()
     {
         if (minimapRevealed) return; // Already revealed

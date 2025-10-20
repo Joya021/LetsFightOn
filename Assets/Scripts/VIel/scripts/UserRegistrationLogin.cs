@@ -35,9 +35,9 @@ public class UserRegistrationLogin : MonoBehaviour
 
     public enum NewUserPanelTiming
     {
-        OnRegistration,          // Show immediately after registration
-        OnFirstVerifiedLogin,    // Show on first login after email verification
-        OnBoth                   // Show on registration AND first verified login
+        OnRegistration,
+        OnFirstVerifiedLogin,
+        OnBoth
     }
 
     private FirebaseAuth auth;
@@ -48,28 +48,25 @@ public class UserRegistrationLogin : MonoBehaviour
 
     void Start()
     {
-        // Wait a frame to ensure EventSystem is ready
+       
         StartCoroutine(InitializeAfterFrame());
     }
 
     IEnumerator InitializeAfterFrame()
     {
-        // Wait one frame for scene to fully load
+       
         yield return null;
 
-        // Force UI to be interactable
         ForceEnableButtons();
 
-        // Wait for Firebase to initialize
+       
         StartCoroutine(WaitForFirebase());
     }
 
     void OnEnable()
     {
-        // Re-enable buttons when scene is reloaded
         ForceEnableButtons();
 
-        // Re-check Firebase status if we're returning to this script
         if (auth == null && FirebaseInitializer.Instance != null && FirebaseInitializer.Instance.IsFirebaseReady())
         {
             StartCoroutine(ReinitializeAuth());
@@ -78,14 +75,11 @@ public class UserRegistrationLogin : MonoBehaviour
 
     void ForceEnableButtons()
     {
-        // Find all buttons in the scene and ensure they're interactable
         UnityEngine.UI.Button[] buttons = GetComponentsInChildren<UnityEngine.UI.Button>(true);
         foreach (var btn in buttons)
         {
             btn.interactable = true;
         }
-
-        // Don't force panel states here - let WaitForFirebase handle it
     }
 
     IEnumerator ReinitializeAuth()
@@ -97,11 +91,9 @@ public class UserRegistrationLogin : MonoBehaviour
             auth = FirebaseAuth.DefaultInstance;
             isFirebaseReady = true;
 
-            // Clear status text
             if (statusText != null)
                 statusText.text = "";
 
-            // Check if there's a logged-in user
             CheckAutoLogin();
         }
         catch (System.Exception ex)
@@ -115,7 +107,7 @@ public class UserRegistrationLogin : MonoBehaviour
 
     IEnumerator WaitForFirebase()
     {
-        // Hide all panels initially to prevent flickering
+       
         if (loginPanel != null)
             loginPanel.SetActive(false);
 
@@ -131,23 +123,19 @@ public class UserRegistrationLogin : MonoBehaviour
         if (newUserPanel != null)
             newUserPanel.SetActive(false);
 
-        // Show loading message
         if (statusText != null)
             statusText.text = "Initializing...";
 
-        // Wait until Firebase is ready
         while (FirebaseInitializer.Instance == null || !FirebaseInitializer.Instance.IsFirebaseReady())
         {
             yield return new WaitForSeconds(0.1f);
         }
 
-        // Firebase is ready, initialize auth
         try
         {
             auth = FirebaseAuth.DefaultInstance;
             isFirebaseReady = true;
 
-            // Set initial password fields to censored
             if (passwordInputField != null)
             {
                 passwordInputField.contentType = InputField.ContentType.Password;
@@ -160,19 +148,18 @@ public class UserRegistrationLogin : MonoBehaviour
                 confirmPasswordInputField.ForceLabelUpdate();
             }
 
-            // Clear status text
+           
             if (statusText != null)
                 statusText.text = "";
 
-            // Check for existing user first, then decide which panel to show
             if (auth.CurrentUser != null)
             {
-                // User exists, let CheckAutoLogin handle panel display
+              
                 CheckAutoLogin();
             }
             else
             {
-                // No user logged in, show login panel
+           
                 if (loginPanel != null)
                     loginPanel.SetActive(true);
             }
@@ -183,7 +170,6 @@ public class UserRegistrationLogin : MonoBehaviour
             if (statusText != null)
                 statusText.text = "Failed to initialize authentication.";
 
-            // Show login panel on error
             if (loginPanel != null)
                 loginPanel.SetActive(true);
         }
@@ -221,11 +207,10 @@ public class UserRegistrationLogin : MonoBehaviour
         }
     }
 
-    // Check if user has completed first login and show panel if needed
     private void CheckAndShowNewUserPanel(FirebaseUser user)
     {
         if (newUserPanelTiming == NewUserPanelTiming.OnRegistration)
-            return; // Only show on registration, not on login
+            return; 
 
         string userKey = FIRST_LOGIN_KEY + user.UserId;
         bool hasCompletedFirstLogin = PlayerPrefs.GetInt(userKey, 0) == 1;
@@ -236,7 +221,7 @@ public class UserRegistrationLogin : MonoBehaviour
         }
     }
 
-    // Mark that the user has completed their first login
+   
     public void MarkFirstLoginComplete()
     {
         if (auth != null && auth.CurrentUser != null)
@@ -267,39 +252,33 @@ public class UserRegistrationLogin : MonoBehaviour
             InputField.ContentType.Standard : InputField.ContentType.Password;
         confirmPasswordInputField.ForceLabelUpdate();
     }
-
-    // Show Guest Sign In Panel
     public void ShowGuestSignInPanel()
     {
         if (guestSignInPanel != null)
             guestSignInPanel.SetActive(true);
     }
 
-    // Close Guest Sign In Panel
     public void CloseGuestSignInPanel()
     {
         if (guestSignInPanel != null)
             guestSignInPanel.SetActive(false);
     }
 
-    // Show New User Panel
     public void ShowNewUserPanel()
     {
         if (newUserPanel != null)
             newUserPanel.SetActive(true);
     }
 
-    // Close New User Panel
     public void CloseNewUserPanel()
     {
         if (newUserPanel != null)
             newUserPanel.SetActive(false);
 
-        // Mark first login as complete when they close the panel
+    
         MarkFirstLoginComplete();
     }
 
-    // Register User
     public void RegisterUser()
     {
         if (!isFirebaseReady || auth == null)
@@ -436,7 +415,7 @@ public class UserRegistrationLogin : MonoBehaviour
             UpdateUserUI(user);
             SwitchToUserPanel();
 
-            // Check if this is their first verified login
+   
             CheckAndShowNewUserPanel(user);
         });
     }
@@ -469,7 +448,7 @@ public class UserRegistrationLogin : MonoBehaviour
                     UpdateUserUI(auth.CurrentUser);
                     SwitchToUserPanel();
 
-                    // Check if this is their first verified login
+                
                     CheckAndShowNewUserPanel(auth.CurrentUser);
                 }
                 else
@@ -505,13 +484,11 @@ public class UserRegistrationLogin : MonoBehaviour
             FirebaseUser user = task.Result.User;
             statusText.text = "Guest signed in: " + user.UserId;
 
-            // Close the guest sign-in panel on success
             CloseGuestSignInPanel();
 
             UpdateUserUI(user);
             SwitchToUserPanel();
 
-            // Check if this is their first time as guest and show new user panel
             CheckAndShowNewUserPanel(user);
         });
     }
@@ -537,7 +514,7 @@ public class UserRegistrationLogin : MonoBehaviour
         if (guestSignInPanel != null) guestSignInPanel.SetActive(false);
         if (newUserPanel != null) newUserPanel.SetActive(false);
 
-        // Re-enable buttons after logout
+       
         ForceEnableButtons();
     }
 
@@ -556,10 +533,10 @@ public class UserRegistrationLogin : MonoBehaviour
         if (userPanel != null) userPanel.SetActive(true);
         if (verificationMessagePanel != null) verificationMessagePanel.SetActive(false);
         if (guestSignInPanel != null) guestSignInPanel.SetActive(false);
-        // Don't auto-close new user panel here, let the user close it
+ 
     }
 
-    // Optional: Reset first login status (for testing purposes)
+ 
     public void ResetFirstLoginStatus()
     {
         if (auth != null && auth.CurrentUser != null)

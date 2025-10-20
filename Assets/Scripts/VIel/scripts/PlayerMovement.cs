@@ -315,11 +315,7 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
             return;
         }
 
-        // DEBUG: Log movement reversal status periodically 
-        if (Time.frameCount % 60 == 0) // Every 60 frames (roughly once per second)
-        {
-          //  Debug.Log($"[DEBUG] Frame {Time.frameCount} - movementReversed: {movementReversed}, speed: {speed}, originalSpeed: {originalSpeed}");
-        }
+       
 
         if (isRushing && Time.time >= rushEndTime)
         {
@@ -582,7 +578,6 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
     }
 }
 
-    // MODIFIED: UseDebugAbility now works as an interact button substitute
     void UseDebugAbility()
     {
         if (!canMove || isStunned)
@@ -598,13 +593,12 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
 
         if (inMultiplayer)
         {
-            // ============= MULTIPLAYER MODE =============
+            // MULTIPLAYER MODE
             CodeCheckGame nearestIntercom = FindNearestIntercom();
 
             if (nearestIntercom != null)
             {
-               // Debug.Log($"[DEBUG] Found nearest intercom: {nearestIntercom.name}");
-                //Debug.Log($"[DEBUG] Intercom isOnCooldown: {nearestIntercom.isOnCooldown}");
+             
 
                 if (!nearestIntercom.isOnCooldown)
                 {
@@ -626,7 +620,7 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
         }
         else
         {
-            // ============= OFFLINE MODE =============
+            //OFFLINE MODE
             OfflineCodeCheckGame nearestOfflineIntercom = FindNearestOfflineIntercom();
 
             if (nearestOfflineIntercom != null)
@@ -719,7 +713,7 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
         StartCoroutine(ResetAttackAnimationAfterDelay(0.5f));
     }
 
-    // RPC method to stun hunter - MUST BE ADDED!
+   
     [PunRPC]
     void RPC_StunHunterTarget(int targetViewID, float duration)
     {
@@ -750,25 +744,21 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
     {
         if (survivorStunTimer > 0f || !canMove || isStunned)
         {
-            Debug.Log($"[SURVIVOR STUN] ❌ Blocked - cooldown:{survivorStunTimer:F1}s, canMove:{canMove}, stunned:{isStunned}");
+            Debug.Log($"[SURVIVOR STUN] Blocked - cooldown:{survivorStunTimer:F1}s, canMove:{canMove}, stunned:{isStunned}");
             return;
         }
 
-        Debug.Log("[SURVIVOR STUN] =====================================");
-        Debug.Log("[SURVIVOR STUN] 🎯 STUN BUTTON PRESSED!");
-        Debug.Log($"[SURVIVOR STUN] My position: {transform.position}");
-        Debug.Log($"[SURVIVOR STUN] Stun range: {survivorStunRange}");
+        Debug.Log("[SURVIVOR STUN] STUN BUTTON PRESSED!");
 
-        // Trigger attack animation
         TriggerAttackAnimation();
 
-        // Check if we're in multiplayer
+        // Check if in multiplayer
         bool inMultiplayer = PhotonNetwork.IsConnected && view != null;
         Debug.Log($"[SURVIVOR STUN] Multiplayer mode: {inMultiplayer}");
 
         if (inMultiplayer)
         {
-            // ============= MULTIPLAYER MODE =============
+            //MULTIPLAYER MODE
             GameObject[] allPlayers = GameObject.FindGameObjectsWithTag("Player");
             Debug.Log($"[SURVIVOR STUN] Found {allPlayers.Length} players with 'Player' tag");
 
@@ -809,7 +799,7 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
 
                 if (distance <= survivorStunRange)
                 {
-                    Debug.Log($"[SURVIVOR STUN]   - 🎯 IN RANGE! Stunning via RPC...");
+                    Debug.Log($"[SURVIVOR STUN]   - IN RANGE! Stunning via RPC...");
 
                     view.RPC("RPC_StunHunterTarget", RpcTarget.All, targetView.ViewID, survivorStunDuration);
                     survivorStunTimer = survivorStunCooldown;
@@ -821,13 +811,13 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
                 }
             }
 
-            Debug.Log("[SURVIVOR STUN] ⚠️ No hunters in range");
+            Debug.Log("[SURVIVOR STUN] No hunters in range");
             survivorStunTimer = survivorStunCooldown;
         }
         else
         {
-            // ============= OFFLINE MODE - FIXED =============
-            Debug.Log("[SURVIVOR STUN] 🔧 Offline mode - searching for AI hunter");
+            // OFFLINE MODE - FIXED 
+            Debug.Log("[SURVIVOR STUN]searching for AI hunter");
 
             // Find AI hunters with HunterChaseAndHack
             HunterChaseAndHack[] hunters = FindObjectsOfType<HunterChaseAndHack>();
@@ -847,7 +837,7 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
 
                     if (stunnable != null)
                     {
-                        Debug.Log($"[SURVIVOR STUN] ✅ STUNNING {hunterObj.name} for {survivorStunDuration}s!");
+                        Debug.Log($"[SURVIVOR STUN] STUNNING {hunterObj.name} for {survivorStunDuration}s!");
 
                         // Stun for 5 seconds
                         stunnable.Stun(survivorStunDuration);
@@ -858,21 +848,21 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
                         if (AudioManager.Instance != null)
                             AudioManager.Instance.PlayCorrectAnswer();
 
-                        Debug.Log($"[SURVIVOR STUN] ✅ Stun applied! Cooldown: {survivorStunCooldown}s");
+                        Debug.Log($"[SURVIVOR STUN] Stun applied! Cooldown: {survivorStunCooldown}s");
                         return;
                     }
                     else
                     {
-                        Debug.LogError($"[SURVIVOR STUN] ❌ No StunnableScript on {hunterObj.name}!");
+                        Debug.LogError($"[SURVIVOR STUN] No StunnableScript on {hunterObj.name}!");
                     }
                 }
             }
 
-            Debug.Log("[SURVIVOR STUN] ⚠️ No hunters in range");
+            Debug.Log("[SURVIVOR STUN] No hunters in range");
             survivorStunTimer = survivorStunCooldown;
         }
 
-        Debug.Log("[SURVIVOR STUN] =====================================");
+       // Debug.Log("[SURVIVOR STUN]=");
     }
 
     // NEW: RPC method to stun hunter (mirrors hunter's RPC_StunPlayer)
@@ -926,13 +916,13 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
         GameManager gm = FindObjectOfType<GameManager>();
         if (gm != null)
         {
-            // Only heal self, no range check needed
+            
             if (gm.currentHP < gm.maxHP)
             {
                 gm.HealPlayer(healAmount);
                 healTimer = healCooldown;
 
-                // Apply heal visual effect to self only
+             
                 StunnableScript selfStunnable = GetComponent<StunnableScript>();
                 if (selfStunnable != null)
                 {
@@ -1041,16 +1031,15 @@ public class PlayerMovement : MonoBehaviour, IPunObservable
             movement.y = Input.GetAxisRaw("Vertical");
         }
 
-        // FIXED: Apply movement reversal for grog effect only
+     
         if (movementReversed)
         {
-           // Debug.Log($"[DEBUG] MOVEMENT REVERSAL ACTIVE! Original movement: {movement}, Reversed: {-movement}");
+         
             movement = -movement;
         }
         else if (Input.GetAxis("Horizontal") != 0 || Input.GetAxis("Vertical") != 0)
         {
-            // Only log when actually moving to avoid spam
-           // Debug.Log($"[DEBUG] Movement NOT reversed - movementReversed: {movementReversed}, movement: {movement}");
+           
         }
 
         if (movement.magnitude > 0.1f)

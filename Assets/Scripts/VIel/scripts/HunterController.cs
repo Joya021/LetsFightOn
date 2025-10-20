@@ -491,7 +491,7 @@ public class HunterController : MonoBehaviourPunCallbacks, IPunObservable
         if (Input.GetKeyDown(rageKey) && CanUseRage())
             ActivateRageMode();
 
-        // FIXED: Only allow using unique ability if this hunter has one
+       
         if (Input.GetKeyDown(uniqueAbilityKey))
         {
             if (hasRedCloakedAbility && CanUseGrog())
@@ -779,14 +779,12 @@ public class HunterController : MonoBehaviourPunCallbacks, IPunObservable
     {
         Debug.Log("[DEBUG] ApplyGrogEffect started - REVERSING movement (Grog only)");
 
-        // Enable movement reversal for RedCloaked grog ability ONLY
         pm.movementReversed = true;
 
         Debug.Log($"[DEBUG] Grog effect applied - Movement reversed: {pm.movementReversed}");
 
         yield return new WaitForSeconds(grogDuration);
 
-        // Disable movement reversal when grog ends
         pm.movementReversed = false;
 
         Debug.Log($"[DEBUG] Grog effect ended - Movement reversed: {pm.movementReversed}");
@@ -795,7 +793,7 @@ public class HunterController : MonoBehaviourPunCallbacks, IPunObservable
     {
         if (!CanUseAuraFarm()) return;
 
-        // FIXED: Only FatalException can use this ability
+      
         if (!hasFatalExceptionAbility)
         {
             Debug.Log("[AURA FARM] This hunter doesn't have the Aura Farm ability!");
@@ -840,23 +838,22 @@ public class HunterController : MonoBehaviourPunCallbacks, IPunObservable
         {
             PhotonView targetView = playerObj.GetComponent<PhotonView>();
 
-            // Skip self
             if (targetView != null && targetView == photonView)
             {
                 Debug.Log($"[AURA FARM] Skipping self");
                 continue;
             }
 
-            // Check if target is a survivor
+       
             bool isSurvivor = true;
             if (targetView != null && targetView.Owner != null && targetView.Owner.CustomProperties.ContainsKey("PlayerRole"))
             {
-                // PlayerRole: false = survivor, true = hunter
+                
                 isSurvivor = !(bool)targetView.Owner.CustomProperties["PlayerRole"];
             }
             else
             {
-                // Offline mode: check if they have PlayerMovement (survivor) component
+                
                 PlayerMovement playerMovements = playerObj.GetComponent<PlayerMovement>();
                 isSurvivor = (playerMovements != null);
             }
@@ -894,7 +891,7 @@ public class HunterController : MonoBehaviourPunCallbacks, IPunObservable
 
     IEnumerator ApplyAuraFarmSlowEffect(PlayerMovement playerMove)
     {
-        Debug.Log($"[AURA FARM SLOW] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      
         Debug.Log($"[AURA FARM SLOW] Starting on: {playerMove.gameObject.name}");
         Debug.Log($"[AURA FARM SLOW] Original speed: {playerMove.speed}");
         Debug.Log($"[AURA FARM SLOW] Slow amount: {auraFarmSlowAmount}");
@@ -903,24 +900,21 @@ public class HunterController : MonoBehaviourPunCallbacks, IPunObservable
 
         float originalSpeed = playerMove.speed;
 
-        // ⚠️ CRITICAL: Aura Farm ONLY slows, NEVER reverses movement
+      
         playerMove.movementReversed = false;
 
-        // Apply speed reduction (auraFarmSlowAmount should be negative, e.g. -2f)
+        
         float newSpeed = playerMove.speed + auraFarmSlowAmount;
 
-        // Prevent speed from going too low or negative
+     
         playerMove.speed = Mathf.Max(0.5f, newSpeed);
 
-        Debug.Log($"[AURA FARM SLOW] ✅ Applied! New speed: {playerMove.speed}");
+        Debug.Log($"[AURA FARM SLOW] Applied! New speed: {playerMove.speed}");
         Debug.Log($"[AURA FARM SLOW] Movement reversed AFTER: {playerMove.movementReversed}");
 
         yield return new WaitForSeconds(auraFarmDuration);
 
-        // Restore original speed
         playerMove.speed = originalSpeed;
-
-        // ⚠️ CRITICAL: Ensure movement is still NOT reversed when effect ends
         playerMove.movementReversed = false;
 
         Debug.Log($"[AURA FARM SLOW] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
