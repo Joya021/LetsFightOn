@@ -5,6 +5,7 @@ using UnityEngine.Tilemaps;
 
 public class ObjectSpawner : MonoBehaviour
 {
+    public ObjectLocator objectLocator;
     public GameObject[] objectsToSpawn; // Each object will be spawned once
     public Tilemap tileMap;
 
@@ -38,6 +39,8 @@ public class ObjectSpawner : MonoBehaviour
                     Vector3 spawnPos = tileMap.CellToWorld(randomCell) + new Vector3(0.5f, 0.5f, 0);
                     Instantiate(obj, spawnPos, Quaternion.identity);
                     placed = true;
+
+                    objectLocator.RegisterTarget(obj.transform);
                 }
             }
 
