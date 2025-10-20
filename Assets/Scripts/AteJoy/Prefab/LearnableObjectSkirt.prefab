@@ -120,7 +120,7 @@ BoxCollider2D:
   m_IsTrigger: 1
   m_UsedByEffector: 0
   m_UsedByComposite: 0
-  m_Offset: {x: 0.011567116, y: -0.0000009536743}
+  m_Offset: {x: -0.20361853, y: -0.0000009536743}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
@@ -131,7 +131,7 @@ BoxCollider2D:
     adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
-  m_Size: {x: 9.733704, y: 9.0548115}
+  m_Size: {x: 8.565555, y: 9.0548115}
   m_EdgeRadius: 0
 --- !u!114 &1507087140887517996
 MonoBehaviour:
@@ -145,19 +145,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7001eb589df42ab4ca62622b1e4042fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  isCompleted: 0
-  learnableObjectSprite: {fileID: 21300000, guid: 48799294b8a674240a10a2feb2411e01, type: 3}
-  learnableObjectSprite1: {fileID: 21300000, guid: 48799294b8a674240a10a2feb2411e01, type: 3}
-  learnableObjectSprite2: {fileID: 21300000, guid: 48799294b8a674240a10a2feb2411e01, type: 3}
-  closeButtonSprite1: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
-  closeButtonSprite2: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
-  closeButtonSprite3: {fileID: 21300000, guid: 2cd2356d790372e49b4f6fde002968dc, type: 3}
-  lessonSprite: {fileID: 21300000, guid: 6e667840fa8848849ae45ae4cd5da935, type: 3}
-  brokenCodeSprite: {fileID: 21300000, guid: 2baa3af329797e844a9dfbd261db26b7, type: 3}
-  expectedFix: '''elseif'''
-  objectObtainedMessage: Skirt Obtained!
-  successMessageSprite: {fileID: 21300000, guid: c24332a0ea6252b44a4bc590fecc4b22, type: 3}
-  itemID: 9
+  lessonText: 
+  pythonChallenge: 
+  itemID: 
 --- !u!95 &2000666147483944589
 Animator:
   serializedVersion: 5

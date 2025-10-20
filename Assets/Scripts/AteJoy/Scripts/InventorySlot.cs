@@ -13,16 +13,14 @@ public class InventorySlot : MonoBehaviour
     {
         itemData = item;
         lessonPopup = popup;
-
-        if (icon != null && itemData.learnableObjectSprite != null)
-            icon.sprite = itemData.learnableObjectSprite;
+        icon.sprite = item.learnableObjectSprite;
     }
 
     public void OnClickSlot()
     {
         if (lessonPopup != null && itemData != null)
         {
-            lessonPopup.ShowLessonFromInventory(itemData.learnableObjectSprite, itemData.lessonSprite);
+            lessonPopup.ShowLessonFromInventory(itemData.lessonSprite);
         }
     }
 }

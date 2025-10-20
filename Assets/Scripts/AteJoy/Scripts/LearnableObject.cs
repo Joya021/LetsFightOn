@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class LearnableObject : MonoBehaviour
 {
@@ -14,16 +13,13 @@ public class LearnableObject : MonoBehaviour
     public Sprite closeButtonSprite2;
     public Sprite closeButtonSprite3;
     public Sprite lessonSprite;
+    public Sprite sampleCodeSprite;
     public Sprite brokenCodeSprite;
+    public Sprite successMessageSprite;
 
     [SerializeField]
     [TextArea(3, 10)] // Min 3 lines, max 10 lines
     public string expectedFix;
-
-    [TextArea(1, 1)]
-    public string objectObtainedMessage;
-
-    public Sprite successMessageSprite;
 
     public string itemID;
 
